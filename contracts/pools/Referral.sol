@@ -6,10 +6,10 @@ import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IReferral.sol";
-import "./interfaces/ILuckyPower.sol";
-import "./libraries/SafeBEP20.sol";
+import "../interfaces/IBEP20.sol";
+import "../interfaces/IReferral.sol";
+import "../interfaces/ILuckyPower.sol";
+import "../libraries/SafeBEP20.sol";
 
 contract Referral is IReferral, Ownable, ReentrancyGuard {
     using SafeMath for uint256;

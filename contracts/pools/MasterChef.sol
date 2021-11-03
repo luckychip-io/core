@@ -6,12 +6,12 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IReferral.sol";
-import "./interfaces/ILuckyPower.sol";
-import "./interfaces/IMasterChef.sol";
-import "./libraries/SafeBEP20.sol";
-import "./LCToken.sol";
+import "../interfaces/IBEP20.sol";
+import "../interfaces/IReferral.sol";
+import "../interfaces/ILuckyPower.sol";
+import "../interfaces/IMasterChef.sol";
+import "../libraries/SafeBEP20.sol";
+import "../token/LCToken.sol";
 
 // MasterChef is the master of LC. He can make LC and he is a fair guy.
 //

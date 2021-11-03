@@ -2,7 +2,7 @@
 
 pragma solidity 0.6.12;
 
-import "../LCBEP20.sol";
+import "./LCBEP20.sol";
 
 contract MockBEP20 is LCBEP20 {
     constructor(

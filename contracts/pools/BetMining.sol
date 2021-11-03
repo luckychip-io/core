@@ -7,13 +7,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IBetMining.sol";
-import "./interfaces/IOracle.sol";
-import "./interfaces/IReferral.sol";
-import "./interfaces/ILuckyPower.sol";
-import "./libraries/SafeBEP20.sol";
-import "./LCToken.sol";
+import "../interfaces/IBEP20.sol";
+import "../interfaces/IBetMining.sol";
+import "../interfaces/IOracle.sol";
+import "../interfaces/IReferral.sol";
+import "../interfaces/ILuckyPower.sol";
+import "../libraries/SafeBEP20.sol";
+import "../token/LCToken.sol";
 
 contract BetMining is IBetMining, Ownable, ReentrancyGuard {
     using SafeMath for uint256;

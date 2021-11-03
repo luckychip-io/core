@@ -5,14 +5,14 @@ pragma solidity 0.6.12;
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/EnumerableSet.sol';
-import './libraries/FixedPoint.sol';
-import './libraries/LuckyChipOracleLibrary.sol';
-import './libraries/LuckyChipLibrary.sol';
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IOracle.sol";
-import "./interfaces/IDice.sol";
-import './interfaces/ILuckyChipFactory.sol';
-import './interfaces/ILuckyChipPair.sol';
+import '../libraries/FixedPoint.sol';
+import '../libraries/LuckyChipOracleLibrary.sol';
+import '../libraries/LuckyChipLibrary.sol';
+import "../interfaces/IBEP20.sol";
+import "../interfaces/IOracle.sol";
+import "../interfaces/IDice.sol";
+import '../interfaces/ILuckyChipFactory.sol';
+import '../interfaces/ILuckyChipPair.sol';
 
 contract Oracle is Ownable, IOracle {
     using FixedPoint for *;

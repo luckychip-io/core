@@ -7,14 +7,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IOracle.sol";
-import "./interfaces/ILuckyPower.sol";
-import "./interfaces/IMasterChef.sol";
-import "./interfaces/IBetMining.sol";
-import "./interfaces/IReferral.sol";
-import "./interfaces/ILottery.sol";
-import "./libraries/SafeBEP20.sol";
+import "../interfaces/IBEP20.sol";
+import "../interfaces/IOracle.sol";
+import "../interfaces/ILuckyPower.sol";
+import "../interfaces/IMasterChef.sol";
+import "../interfaces/IBetMining.sol";
+import "../interfaces/IReferral.sol";
+import "../interfaces/ILottery.sol";
+import "../libraries/SafeBEP20.sol";
 
 contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
