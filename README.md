@@ -1,4 +1,4 @@
-# LuckyChip Staking
+# LuckyChip core contracts
 
 The following assumes the use of `node@>=10`.
 
