@@ -6,7 +6,7 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/EnumerableSet.sol';
 import '../libraries/FixedPoint.sol';
-import '../libraries/LuckyChipOracleLibrary.sol';
+import '../libraries/OracleLibrary.sol';
 import '../libraries/LuckyChipLibrary.sol';
 import "../interfaces/IBEP20.sol";
 import "../interfaces/IOracle.sol";
@@ -56,7 +56,7 @@ contract Oracle is Ownable, IOracle {
         uint256 timeElapsed = block.timestamp - observation.timestamp;
         if (timeElapsed < CYCLE) return false;
 
-        (uint256 price0Cumulative, uint256 price1Cumulative, ) = LuckyChipOracleLibrary.currentCumulativePrices(pair);
+        (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
         observation.timestamp = block.timestamp;
         observation.price0Cumulative = price0Cumulative;
         observation.price1Cumulative = price1Cumulative;
@@ -93,7 +93,7 @@ contract Oracle is Ownable, IOracle {
 
         Observation memory observation = pairObservations[pair];
         uint256 timeElapsed = block.timestamp - observation.timestamp;
-        (uint256 price0Cumulative, uint256 price1Cumulative, ) = LuckyChipOracleLibrary.currentCumulativePrices(pair);
+        (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
         (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
 
         if (token0 == tokenIn) {
