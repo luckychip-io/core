@@ -1,14 +1,14 @@
 {
-  "name": "@luckychip/staking",
+  "name": "@luckychip/core",
   "version": "1.0.0",
-  "description": "Smart contracts for LuckyChip Staking",
+  "description": "Core contracts for LuckyChip",
   "engines": {
     "node": ">=10"
   },
   "homepage": "https://luckychip.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/luckychip-io/staking"
+    "url": "https://github.com/luckychip-io/core"
   },
   "files": [
     "build",
@@ -38,7 +38,6 @@
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-etherscan": "^2.1.2",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
-	"@uniswap/v2-periphery": "^1.1.0-beta.0",
 	"@ethersproject/experimental": "^5.0.1",
 	"dotenv": "^8.2.0",
     "chai": "^4.3.4",
