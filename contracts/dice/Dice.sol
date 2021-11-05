@@ -571,7 +571,6 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
         emit RewardsCalculated(epoch, round.burnAmount, round.bonusAmount, round.lotteryAmount);
     }
 
-
     // Deposit token to Dice as a banker, get Syrup back.
     function deposit(uint256 _tokenAmount) public whenPaused nonReentrant notContract {
         require(_tokenAmount > 0, "Amount > 0");
