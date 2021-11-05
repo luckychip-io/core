@@ -530,7 +530,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             bankerAmount = tmpBankerAmount;
     
             totalDevAmount = totalDevAmount.add(devAmount);
-            if(address(swapRouter) != address(0)){
+            if(round.burnAmount > 0 && address(swapRouter) != address(0)){
                 address[] memory path = new address[](2);
                 path[0] = WBNB;
                 path[1] = address(lcToken);

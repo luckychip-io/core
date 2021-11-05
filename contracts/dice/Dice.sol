@@ -529,7 +529,7 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
             totalDevAmount = totalDevAmount.add(devAmount);
             if(address(token) == address(lcToken)){
                 totalBurnAmount = totalBurnAmount.add(burnAmount);
-            }else if(address(swapRouter) != address(0)){
+            }else if(round.burnAmount > 0 && address(swapRouter) != address(0)){
                 address[] memory path = new address[](2);
                 path[0] = address(token);
                 path[1] = address(lcToken);
