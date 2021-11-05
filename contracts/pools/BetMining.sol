@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.6.12;
-pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
@@ -32,13 +31,6 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         uint256 accRewardAmount; // How many rewards the user has got.
     }
 
-    struct UserView {
-        uint256 quantity;
-        uint256 accQuantity;
-        uint256 unclaimedRewards;
-        uint256 accRewardAmount;
-    }
-
     // Info of each pool.
     struct PoolInfo {
         address token; // Address of LP token contract.
@@ -49,22 +41,6 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         uint256 accQuantity;
         uint256 allocRewardAmount;
         uint256 accRewardAmount;
-    }
-
-    struct PoolView {
-        uint256 pid;
-        address token;
-        uint256 allocPoint;
-        uint256 lastRewardBlock;
-        uint256 rewardsPerBlock;
-        uint256 accRewardPerShare;
-        uint256 allocRewardAmount;
-        uint256 accRewardAmount;
-        uint256 quantity;
-        uint256 accQuantity;
-        string symbol;
-        string name;
-        uint8 decimals;
     }
 
     // The reward token!
@@ -465,67 +441,5 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
 
     function getPoolLength() public view returns (uint256) {
         return poolInfo.length;
-    }
-
-    function getAllPools() external view returns (PoolInfo[] memory) {
-        return poolInfo;
-    }
-
-    function getPoolView(uint256 _pid) public view validPool(_pid) returns (PoolView memory) {
-        PoolInfo memory pool = poolInfo[_pid];
-        IBEP20 tmpToken = IBEP20(pool.token);
-        uint256 rewardsPerBlock = pool.allocPoint.mul(rewardTokenPerBlock).div(totalAllocPoint);
-        return
-            PoolView({
-                pid: _pid,
-                token: pool.token,
-                allocPoint: pool.allocPoint,
-                lastRewardBlock: pool.lastRewardBlock,
-                accRewardPerShare: pool.accRewardPerShare,
-                rewardsPerBlock: rewardsPerBlock,
-                allocRewardAmount: pool.allocRewardAmount,
-                accRewardAmount: pool.accRewardAmount,
-                quantity: pool.quantity,
-                accQuantity: pool.accQuantity,
-                symbol: tmpToken.symbol(),
-                name: tmpToken.name(),
-                decimals: tmpToken.decimals()
-            });
-    }
-
-    function getPoolViewByAddress(address token) public view returns (PoolView memory) {
-        uint256 pid = tokenOfPid[token];
-        return getPoolView(pid);
-    }
-
-    function getAllPoolViews() external view returns (PoolView[] memory) {
-        PoolView[] memory views = new PoolView[](poolInfo.length);
-        for (uint256 i = 0; i < poolInfo.length; i++) {
-            views[i] = getPoolView(i);
-        }
-        return views;
-    }
-
-    function getUserView(address token, address account) public view returns (UserView memory) {
-        uint256 pid = tokenOfPid[token];
-        UserInfo memory user = userInfo[pid][account];
-        uint256 unclaimedRewards = pendingRewards(pid, account);
-        return
-            UserView({
-                quantity: user.quantity,
-                accQuantity: user.accQuantity,
-                unclaimedRewards: unclaimedRewards,
-                accRewardAmount: user.accRewardAmount
-            });
-    }
-
-    function getUserViews(address account) external view returns (UserView[] memory) {
-        address token;
-        UserView[] memory views = new UserView[](poolInfo.length);
-        for (uint256 i = 0; i < poolInfo.length; i++) {
-            token = address(poolInfo[i].token);
-            views[i] = getUserView(token, account);
-        }
-        return views;
     }
 }
