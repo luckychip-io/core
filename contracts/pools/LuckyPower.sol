@@ -77,7 +77,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return EnumerableSet.contains(_updaters, account);
     }
 
-    // modifier for mint function
+    // modifier for updater
     modifier onlyUpdater() {
         require(isUpdater(msg.sender), "caller is not a updater");
         _;
