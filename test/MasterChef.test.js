@@ -1,13 +1,12 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const { AddressZero } = require("@ethersproject/constants")
 const { assert } = require('chai');
-const JSBI           = require('jsbi')
 const LCToken = artifacts.require('LCToken');
 const MasterChef = artifacts.require('MasterChef');
 const MockBEP20 = artifacts.require('libs/MockBEP20');
 //let perBlock = '100000000000000000000';
 let perBlock = '1000';
-const delay = ms => new Promise(res => setTimeout(res, ms));
+
 contract('MasterChef', ([alice, bob, carol, dev0, dev1, dev2, safuAddr, treasuryAddr, minter]) => {
     beforeEach(async () => {
         this.lc = await LCToken.new({ from: minter });
