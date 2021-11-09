@@ -17,8 +17,8 @@
   "scripts": {
     "migrate": "truffle migrate --network testnet --reset",
     "compile": "truffle compile --network testnet",
-    "test": "npx builder test",
-    "coverage": "npx builder coverage"
+    "test": "npx buidler test",
+    "coverage": "npx buidler coverage"
   },
   "dependencies": {
     "@openzeppelin/contracts": "3.4.1",
