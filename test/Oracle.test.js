@@ -81,4 +81,8 @@ contract('Oracle', ([alice, bob, carol, dev, creater, swapFeeTo]) => {
         const value = await this.oracle.getLpTokenValue.call(pairAddr, balance);
         console.log(`lp Token,${value}`);
     })
+    it('getDiceTokenValue', async () => {
+        const value = await this.oracle.getDiceTokenValue.call(this.lc.address, ethers.utils.parseEther("1"));
+        console.log(`dice Token,${value}`);
+    })
 });
