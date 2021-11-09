@@ -8,7 +8,7 @@ const WBNB = artifacts.require('WBNB');
 const LCToken = artifacts.require('LCToken');
 const Oracle = artifacts.require('Oracle');
 
-contract('Oracle', ([alice, bob, carol, dev, creater, swapFeeTo]) => {
+contract('Oracle', ([alice, creater, swapFeeTo]) => {
     before(async () => {
         // factory
         this.factory = await LuckyChipFactory.new(creater, { from: creater });
