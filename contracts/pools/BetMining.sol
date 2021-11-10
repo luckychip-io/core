@@ -174,12 +174,10 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-
-        if (pool.quantity == 0) {
+        if (pool.quantity <= 0) {
             pool.lastRewardBlock = block.number;
             return;
         }
-
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
         uint256 tokenReward = multiplier.mul(rewardTokenPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
         pool.lastRewardBlock = block.number;
@@ -261,16 +259,12 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accRewardPerShare = pool.accRewardPerShare;
 
-        if (user.quantity > 0 && pool.quantity > 0) {
-            if (block.number > pool.lastRewardBlock) {
-                uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-                uint256 tokenReward = multiplier.mul(rewardTokenPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-                accRewardPerShare = accRewardPerShare.add(tokenReward.mul(1e12).div(pool.quantity));
-            }
-            return user.pendingReward.add(user.quantity.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt));
-        }else{
-            return 0;
+        if (block.number > pool.lastRewardBlock && pool.quantity > 0) {
+            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 tokenReward = multiplier.mul(rewardTokenPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+            accRewardPerShare = accRewardPerShare.add(tokenReward.mul(1e12).div(pool.quantity));    
         }
+        return user.pendingReward.add(user.quantity.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt));
     }
 
     function withdraw(uint256 _pid) public validPool(_pid) nonReentrant {

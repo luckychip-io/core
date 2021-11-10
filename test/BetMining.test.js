@@ -28,7 +28,7 @@ contract('BetMining', ([alice, bob, carol, treasury, creater, swapFeeTo]) => {
         this.lc = await LCToken.new({ from: creater });
         await this.lc.addMinter(creater, {from: creater});
         await this.lc.mint(creater, ethers.utils.parseEther("1000000"), { from: creater });
-        consolo.log(`lc,${this.lc.address}`);
+        console.log(`lc,${this.lc.address}`);
 
         // Router
         this.router = await LuckyChipRouter02.new(
@@ -66,7 +66,7 @@ contract('BetMining', ([alice, bob, carol, treasury, creater, swapFeeTo]) => {
         await this.WBNB.approve(this.betMining.address, ethers.constants.MaxUint256, { from: alice });
         await this.lc.approve(this.betMining.address, ethers.constants.MaxUint256, { from: alice });
         await this.betMining.addBetTable(creater, {from: creater});
-
+        console.log(`rewardTokenPerBlock,${await this.betMining.rewardTokenPerBlock()}`);
     });
     it('real case', async () => {
         await this.betMining.add('700', this.lc.address, { from: creater });
@@ -78,17 +78,21 @@ contract('BetMining', ([alice, bob, carol, treasury, creater, swapFeeTo]) => {
 		console.log(`startBlock: ${(await this.betMining.startBlock())}`);
         result = await this.betMining.poolInfo(0);
         console.log(`poolInfo,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]},${result[6]},${result[7]}`);
+        result = await this.betMining.getMultiplier.call(150, 170, { from: creater});
+        console.log(`multiplier,${result}`);
 
         //1 - lp
         console.log('----Deposit----');
 		assert.equal((await this.lc.balanceOf(alice)).toString(), '0');
         await time.advanceBlockTo('150');
 		console.log(`Current block: ${(await time.latestBlock())}`);
-        await this.betMining.bet(alice, bob, this.lc.address, ethers.utils.parseEther("1"), { from: creater });
-        
+        await this.betMining.bet(alice, bob, this.lc.address, '20', { from: creater });
+        result = await this.betMining.poolInfo(0);
+        console.log(`poolInfo,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]},${result[6]},${result[7]}`);
+
         assert.equal(await this.referral.getReferrer.call(alice), bob);
 		let user = await this.betMining.userInfo(0, alice, {from: alice});
-		console.log(`${user[0]},${user[1]}`);
+		console.log(`userInfo,${user[0]},${user[1]},${user[2]},${user[3]},${user[4]}`);
 		console.log((await this.betMining.pendingRewards(0, alice)).toString());
         await time.advanceBlockTo('170');
 		console.log((await this.betMining.pendingRewards(0, alice)).toString());
@@ -98,7 +102,9 @@ contract('BetMining', ([alice, bob, carol, treasury, creater, swapFeeTo]) => {
         await time.advanceBlockTo('200'); 
         await this.betMining.withdraw(0, { from: alice });
 		user = await this.betMining.userInfo(0, alice, {from: alice});
-		console.log(`${user[0]},${user[1]}`);
+		console.log(`userInfo,${user[0]},${user[1]},${user[2]},${user[3]},${user[4]}`);
+        result = await this.betMining.poolInfo(0);
+        console.log(`poolInfo,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]},${result[6]},${result[7]}`);
         let aliceBalance = await this.lc.balanceOf(alice);
         console.log('alice balance: ', aliceBalance.toString());
 		console.log(`Current block: ${(await time.latestBlock())}`);
@@ -110,8 +116,8 @@ contract('BetMining', ([alice, bob, carol, treasury, creater, swapFeeTo]) => {
         result = await this.referral.getReferralCommission.call(bob);
         console.log(`commission,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]}`);
         assert.equal((await this.lc.balanceOf(bob)).toString(), '0');
-        await this.referral.claimLpCommission({from: bob});
+        await this.referral.claimBetCommission({from: bob});
         console.log(`bob lcBalance,${await this.lc.balanceOf(bob)}`);
-        //assert.equal((await this.lc.balanceOf(bob)).toString(), '1750');
+        assert.equal((await this.lc.balanceOf(bob)).toString(), '1750');
     })
 });
