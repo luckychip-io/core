@@ -1,73 +1,126 @@
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
-const { AddressZero } = require("@ethersproject/constants")
+const { AddressZero } = require("@ethersproject/constants");
 const { assert } = require('chai');
-const ethers = require('ethers');
-const DiceToken = artifacts.require('DiceToken');
+const { ethers } = require('ethers');
+
+const BetMining = artifacts.require('BetMining');
+const LuckyChipFactory = artifacts.require('LuckyChipFactory');
+const LuckyChipRouter02 = artifacts.require('LuckyChipRouter02');
+const WBNB = artifacts.require('WBNB');
 const LCToken = artifacts.require('LCToken');
+const Oracle = artifacts.require('Oracle');
+const Referral = artifacts.require('Referral');
+const DiceToken = artifacts.require('DiceToken');
 const Dice = artifacts.require('Dice');
-const MockBEP20 = artifacts.require('libs/MockBEP20');
-const MasterChef = artifacts.require('MasterChef');
 
-contract('Dice', ([alice, bob, carol, david, admin, lcAdmin, dev0, dev1, dev2, safuAddr, treasuryAddr, minter]) => {
+contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, creater, swapFeeTo]) => {
     beforeEach(async () => {
-		this.token = await MockBEP20.new('Wrapped BNB', 'WBNB', '300000000', { from: minter });
-		await this.token.transfer(alice, '30000000', {from: minter});
-		await this.token.transfer(bob, '30000000', {from: minter});
-		await this.token.transfer(carol, '30000000', {from: minter});
-		await this.token.transfer(david, '30000000', {from: minter});
+        // factory
+        this.factory = await LuckyChipFactory.new(creater, { from: creater });
+        console.log(`init_code_hash,${await this.factory.INIT_CODE_HASH()}`);
+        await this.factory.setFeeTo(swapFeeTo, {from: creater});
+        console.log(`feeTo,${await this.factory.feeTo()}`);
 
-        this.lc = await LCToken.new({ from: minter});
-		this.chef = await MasterChef.new(this.lc.address, dev0, dev1, dev2, safuAddr, treasuryAddr, '1000', '100', '900000','32400', '24300', '24300', '10000', { from: minter });	
-        await this.lc.transferOwnership(this.chef.address, { from: minter });
+        // WBNB
+        this.WBNB = await WBNB.new({from: creater});
+        await this.WBNB.deposit({from: creater, value: ethers.utils.parseEther("10")});
 
-        this.diceToken = await DiceToken.new('LuckyWBNB', 'LuckyWBNB', { from: minter }); 
-        this.dice = await Dice.new(this.token.address, this.lc.address, this.diceToken.address, this.chef.address, 0, 20, 500, 600, 1, 1, 30000000, { from: minter });
-        await this.diceToken.transferOwnership(this.dice.address, { from: minter});
+        // LC
+        this.lc = await LCToken.new({ from: creater });
+        await this.lc.addMinter(creater, {from: creater});
+        await this.lc.mint(creater, ethers.utils.parseEther("1000000"), { from: creater });
+        console.log(`lc,${this.lc.address}`);
 
-		this.lp1 = await MockBEP20.new('LPToken', 'LP1', '10000000', { from: minter });
-		await this.lp1.transfer(carol, '100000', {from:minter});
-		await this.lp1.transfer(david, '100000', {from:minter});
-		await this.chef.add('1000', '90', this.lp1.address, { from: minter });
-		await this.chef.addBonus(this.token.address, { from: minter });
-		await this.lp1.approve(this.chef.address, '100000', {from:carol});
-		await this.lp1.approve(this.chef.address, '100000', {from:david});
-    
+        // Router
+        this.router = await LuckyChipRouter02.new(
+            this.factory.address, 
+            this.WBNB.address, 
+            {from: creater});
+        await this.WBNB.approve(this.router.address, ethers.constants.MaxUint256, {from: creater});
+        await this.lc.approve(this.router.address, ethers.constants.MaxUint256, {from: creater});
+        console.log(`WBNB balance,${await this.WBNB.balanceOf(creater)}`);
+        console.log(`lc balance,${await this.lc.balanceOf(creater)}`);
+        await this.router.addLiquidityETH(
+            this.lc.address, 
+            ethers.utils.parseEther('6000'), 
+            ethers.utils.parseEther('4800'), 
+            ethers.utils.parseEther('0.8'), 
+            creater,
+            ethers.constants.MaxUint256,
+            {value: ethers.utils.parseEther('1'), from: creater}
+        );
+        console.log(`WBNB balance,${await this.WBNB.balanceOf(creater)}`);
+        console.log(`lc balance,${await this.lc.balanceOf(creater)}`);
+
+        // oracle
+        this.oracle = await Oracle.new(this.factory.address, this.lc.address, { from: creater});
+
+        // referral
+        this.referral = await Referral.new(this.lc.address, {from: creater});
+        
+        // betMining
+        this.betMining = await BetMining.new(this.lc.address, this.oracle.address, treasury, ethers.utils.parseEther('950'), '100', { from: creater });
+        await this.lc.addMinter(this.betMining.address, { from: creater });
+        await this.referral.addOperator(this.betMining.address, {from: creater});
+        await this.betMining.setReferral(this.referral.address, {from: creater});
+
+        
+        console.log(`rewardTokenPerBlock,${await this.betMining.rewardTokenPerBlock()}`);
+		await this.betMining.add('700', this.lc.address, { from: creater });
+		await this.betMining.add('250', this.WBNB.address, { from: creater });
+
+		// Dice
+		this.diceToken = await DiceToken.new('LuckyChipDice', 'LuckyChipDice', {from: creater});
+		this.dice = await Dice.new(
+			this.lc.address, 
+			this.lc.address, 
+			this.diceToken.address, 
+			AddressZero,
+			dev2,
+			lotteryAdmin,
+			20,
+			500,
+			600,
+			ethers.utils.parseEther('0.001'),
+			ethers.utils.parseEther('0.001'),
+			ethers.utils.parseEther('300000000'),
+			{from: creater});
+		await this.diceToken.transferOwnership(this.dice.address, {from: creater});
+		await this.dice.setAdmin(lcAdmin, dev2, lotteryAdmin, {from: creater});
+		await this.dice.setBetMining(this.betMining.address, { from: lcAdmin});
+		await this.betMining.addBetTable(this.dice.address, {from: creater});
     });
     it('real case', async () => {
-		await this.dice.setAdmin(admin, lcAdmin, dev2, {from: minter});
+        await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: creater});
+		await this.diceToken.approve(this.dice.address, ethers.constants.MaxUint256, {from: creater});
 
-		await this.token.approve(this.dice.address, '30000000', { from: alice });
-		await this.token.approve(this.dice.address, '30000000', { from: bob });
-		await this.token.approve(this.dice.address, '30000000', { from: carol });
-		await this.token.approve(this.dice.address, '30000000', { from: david });
-		await this.chef.deposit(0, '100', AddressZero, {from:carol});
-		await this.chef.deposit(0, '200', AddressZero, {from:david});
-		await this.diceToken.approve(this.dice.address, '10000000', { from: carol });
-		await this.diceToken.approve(this.dice.address, '10000000', { from: david });
-		await this.dice.deposit(6000000, {from: carol});
-		await this.dice.deposit(12000000, {from: david});
-		await expectRevert(this.dice.deposit(15000000, {from: david}), 'maxBankerAmount Limit');
+		await time.advanceBlockTo('150');
+		await this.dice.deposit(ethers.utils.parseEther("100000"), {from: creater});
 
-		assert.equal((await this.dice.bankerAmount()).toString(), '18000000');
-		//assert.equal((await this.dice.canWithdrawToken(carol)).toString(), '6000000');
+		await this.lc.mint(alice, ethers.utils.parseEther("50"), {from: creater});
+		await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: alice});
+		await this.lc.mint(bob, ethers.utils.parseEther("300"), {from: creater});
+		await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: bob});
 
 		let randomNumber = ethers.utils.hexlify(ethers.utils.randomBytes(32));
 		let bankHash = ethers.utils.keccak256(randomNumber);
 		console.log(randomNumber, bankHash);
-		await expectRevert(this.dice.endBankerTime(1, bankHash, {from: minter}), 'not admin');
-		await this.dice.endBankerTime(1, bankHash, {from: admin});
-
-		console.log('alice balance: ', (await this.token.balanceOf(alice)).toString());		
-		console.log('bob balance: ', (await this.token.balanceOf(bob)).toString());		
-		await this.dice.betNumber([false,false,true,false,false,false], 4000, {from:alice, value:1});
-		await this.dice.betNumber([true,true,true,true,true,true], 24000, {from:bob, value:1});
-		console.log('alice balance: ', (await this.token.balanceOf(alice)).toString());		
-		console.log('bob balance: ', (await this.token.balanceOf(bob)).toString());		
+		//await expectRevert(this.dice.endBankerTime(1, bankHash, {from: creater}), 'not admin');
+		await this.dice.endBankerTime(1, bankHash, {from: lcAdmin});
 
 		let round = await this.dice.rounds(1);
+		console.log(`round1`);
 		for(var i = 0; i < 13; i ++){
 			console.log(`${round[i]}`);
 		}
+		console.log(`round1 end`);
+
+		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
+		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());
+		await this.dice.betNumber([false, false, false, false, false, true], ethers.utils.parseEther("50"), referrer, {value: ethers.utils.parseEther("0.001"), from: alice});
+		await this.dice.betNumber([true,true,true,true,true,true], ethers.utils.parseEther("300"), referrer, {value: ethers.utils.parseEther("0.001"), from: bob});
+		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
+		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());
 
 		lockBlock = round[1];
 		console.log(`Current block: ${(await time.latestBlock())},${lockBlock}`);
@@ -79,8 +132,8 @@ contract('Dice', ([alice, bob, carol, david, admin, lcAdmin, dev0, dev1, dev2, s
 		let newRandomNumber = ethers.utils.hexlify(ethers.utils.randomBytes(32));
 		let newBankHash = ethers.utils.keccak256(newRandomNumber);
 		console.log(newRandomNumber, newBankHash);
-		await this.dice.executeRound(1, newBankHash, {from: admin});
-		await this.dice.sendSecret(1, randomNumber, {from: admin});
+		await this.dice.executeRound(1, newBankHash, {from: lcAdmin});
+		await this.dice.sendSecret(1, randomNumber, {from: lcAdmin});
 
 		round = await this.dice.rounds(1);
 		for(var i = 0; i < 13; i ++){
@@ -101,87 +154,29 @@ contract('Dice', ([alice, bob, carol, david, admin, lcAdmin, dev0, dev1, dev2, s
 			console.log('no reward for alice');
         }
 
+		await time.advanceBlockTo('200');
 		reward = await this.dice.pendingReward(bob, {from: bob});
-		assert.equal((reward[0]).toString(), '23000');
+		//assert.equal((reward[0]).toString(), '23000');
 		await this.dice.claimReward({from: bob});
-		console.log('alice balance: ', (await this.token.balanceOf(alice)).toString());		
-		console.log('bob balance: ', (await this.token.balanceOf(bob)).toString());		
+		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
+		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());		
 		console.log('bankerAmount',(await this.dice.bankerAmount()).toString());
-        console.log('admin balance',(await this.token.balanceOf(admin)).toString());
-        console.log('lcAdmin balance',(await this.token.balanceOf(lcAdmin)).toString());
 
-		await expectRevert(this.dice.deposit(200000, {from: alice}), 'Pausable: not paused');
-		await expectRevert(this.dice.withdraw(200000, {from: alice}), 'Pausable: not paused');
+		await this.betMining.withdraw(0, { from: alice });
+		user = await this.betMining.userInfo(0, alice, {from: alice});
+		console.log(`userInfo,${user[0]},${user[1]},${user[2]},${user[3]},${user[4]}`);
+        result = await this.betMining.poolInfo(0);
+        console.log(`poolInfo,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]},${result[6]},${result[7]}`);
+        let aliceBalance = await this.lc.balanceOf(alice);
+        console.log('alice balance: ', aliceBalance.toString());
+		console.log(`Current block: ${(await time.latestBlock())}`);
 
-		await this.dice.betNumber([false,false,true,false,false,true], 8000, {from:alice, value:1});
-        await this.dice.betNumber([true,true,true,false,false,false], 12000, {from:bob, value:1});
-        console.log('alice balance: ', (await this.token.balanceOf(alice)).toString());
-        console.log('bob balance: ', (await this.token.balanceOf(bob)).toString());
-		
-		round = await this.dice.rounds(2);
-		for(var i = 0; i < 13; i ++){
-			console.log(`${round[i]}`);
-		}
+        result = await this.referral.getReferralCommission.call(referrer);
+        console.log(`commission,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]}`);
+        assert.equal((await this.lc.balanceOf(referrer)).toString(), '0');
+        await this.referral.claimBetCommission({from: referrer});
+        console.log(`referrer lcBalance,${await this.lc.balanceOf(referrer)}`);
+        //assert.equal((await this.lc.balanceOf(referrer)).toString(), '1750');
 
-		lockBlock = round[1];
-		await time.advanceBlockTo(lockBlock);
-		await this.dice.endPlayerTime(2, newRandomNumber, {from: admin});
-
-		round = await this.dice.rounds(2);
-		for(var i = 0; i < 13; i ++){
-			console.log(`${round[i]}`);
-		}
-		console.log(`finalNumber,${round[11]}`);
-
-		reward = await this.dice.pendingReward(alice, {from: alice});
-		if(reward[0] > 0){
-			await this.dice.claimReward({from: alice});
-			console.log(`claim for alice,${reward[0]},${reward[1]},${reward[2]}`);
-		}else{
-			console.log('no reward for alice');
-        }
-
-		reward = await this.dice.pendingReward(bob, {from: bob});
-		if(reward[0] > 0){
-			await this.dice.claimReward({from: bob});
-			console.log(`claim for bob,${reward[0]},${reward[1]},${reward[2]}`);
-		}else{
-			console.log('no reward for bob');
-        }
-
-        console.log('alice balance: ', (await this.token.balanceOf(alice)).toString());
-        console.log('bob balance: ', (await this.token.balanceOf(bob)).toString());
-        console.log('bankerAmount',(await this.dice.bankerAmount()).toString());
-        console.log('admin balance',(await this.token.balanceOf(admin)).toString());
-        console.log('lcAdmin balance',(await this.token.balanceOf(lcAdmin)).toString());
-
-		round = await this.dice.rounds(2);
-		for(var i = 0; i < 13; i ++){
-			console.log(`${round[i]}`);
-		}
-
-        console.log('netValue ', (await this.dice.netValue()).toString());
-        console.log('carol diceToken balance: ', (await this.diceToken.balanceOf(carol)).toString());
-        console.log('david diceToken balance: ', (await this.diceToken.balanceOf(david)).toString());
-        console.log('carol balance: ', (await this.token.balanceOf(carol)).toString());
-        console.log('david balance: ', (await this.token.balanceOf(david)).toString());
-		
-		await this.dice.withdraw(200000, {from: carol});
-		await this.dice.withdraw(400000, {from: david});
-        console.log('carol diceToken balance: ', (await this.diceToken.balanceOf(carol)).toString());
-        console.log('david diceToken balance: ', (await this.diceToken.balanceOf(david)).toString());
-        console.log('carol token balance: ', (await this.token.balanceOf(carol)).toString());
-        console.log('david token balance: ', (await this.token.balanceOf(david)).toString());
-        console.log('carol lp1 balance: ', (await this.lp1.balanceOf(carol)).toString());
-        console.log('david lp1 balance: ', (await this.lp1.balanceOf(david)).toString());
-        console.log('chef token balance: ', (await this.token.balanceOf(this.chef.address)).toString());
-		await this.chef.withdraw(0, 100, {from: carol});
-		await this.chef.withdraw(0, 200, {from: david});
-        console.log('chef token balance: ', (await this.token.balanceOf(this.chef.address)).toString());
-        console.log('carol lp1 balance: ', (await this.lp1.balanceOf(carol)).toString());
-        console.log('david lp1 balance: ', (await this.lp1.balanceOf(david)).toString());
-        console.log('carol token balance: ', (await this.token.balanceOf(carol)).toString());
-        console.log('david token balance: ', (await this.token.balanceOf(david)).toString());
-
-    });
+    })
 });
