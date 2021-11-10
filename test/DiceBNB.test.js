@@ -23,6 +23,8 @@ contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmi
 
         // WBNB
         this.WBNB = await WBNB.new({from: creater});
+		await this.WBNB.deposit({value: ethers.utils.parseEther("1"), from: creater});
+		await this.WBNB.withdraw(ethers.utils.parseEther("2"), {from: creater});
 
         // LC
         this.lc = await LCToken.new({ from: creater });
@@ -138,9 +140,9 @@ contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmi
 		console.log(`finalNumber,${round[11]}`);
 
 		betInfo = await this.dice.ledger(1, alice, {from: alice});
-		console.log(`${betInfo[0]},${betInfo[1]},${betInfo[2]},${betInfo[3]},${betInfo[4]}`)
+		console.log(`${betInfo[0]},${betInfo[1]},${betInfo[2]}`)
 		betInfo = await this.dice.ledger(1, bob, {from: alice});
-		console.log(`${betInfo[0]},${betInfo[1]},${betInfo[2]},${betInfo[3]},${betInfo[4]}`)
+		console.log(`${betInfo[0]},${betInfo[1]},${betInfo[2]}`)
 
 		reward = await this.dice.pendingReward(alice, {from: alice});
 		if(reward[0] > 0){
@@ -150,6 +152,12 @@ contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmi
 			console.log('no reward for alice');
         }
 
+		reward = await this.dice.pendingReward(bob, {from: bob});
+		//assert.equal((reward[0]).toString(), '23000');
+		await this.dice.claimReward({from: bob});
+		console.log('alice balance: ', (await this.WBNB.balanceOf(alice)).toString());		
+		console.log('bob balance: ', (await this.WBNB.balanceOf(bob)).toString());		
+
 		round = await this.dice.rounds(2);
         for(var i = 0; i < 13; i ++){
             console.log(`${round[i]}`);
@@ -157,13 +165,10 @@ contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmi
 
         lockBlock = round[1];
         await time.advanceBlockTo(lockBlock);
+		console.log(`dice WBNB,${await this.WBNB.balanceOf(this.dice.address)}`);
         await this.dice.endPlayerTime(2, newRandomNumber, {from: lcAdmin});
 
-		reward = await this.dice.pendingReward(bob, {from: bob});
-		//assert.equal((reward[0]).toString(), '23000');
-		await this.dice.claimReward({from: bob});
-		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
-		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());		
+		
 		console.log('bankerAmount',(await this.dice.bankerAmount()).toString());
 		balance = await this.diceToken.balanceOf(creater);
 		await this.dice.withdraw(balance, {from: creater});

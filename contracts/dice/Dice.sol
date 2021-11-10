@@ -653,7 +653,6 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // Update the lucky power.
     function setLuckyPower(address _luckyPowerAddr) external onlyAdmin {
-        require(_luckyPowerAddr != address(0), "Zero");
         luckyPower = ILuckyPower(_luckyPowerAddr);
         emit SetLuckyPower(block.number, _luckyPowerAddr);
     }

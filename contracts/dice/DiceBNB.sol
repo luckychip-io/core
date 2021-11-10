@@ -326,6 +326,9 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         if (feeAmount > 0){
             _safeTransferBNB(adminAddr, feeAmount);
         }
+        
+        IWBNB(WBNB).deposit{value: amount}();
+        assert(IWBNB(WBNB).transfer(address(this), amount));
 
         // Update round data
         round.totalAmount = round.totalAmount.add(amount);
@@ -421,7 +424,9 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function _claimBonusAndLottery() internal {
         uint256 tmpAmount = 0;
         uint256 withdrawAmount = totalDevAmount.add(totalBonusAmount).add(totalLotteryAmount);
-        IWBNB(WBNB).withdraw(withdrawAmount);
+        if(withdrawAmount > 0){
+            IWBNB(WBNB).withdraw(withdrawAmount);
+        }
         if(totalDevAmount > 0){
             tmpAmount = totalDevAmount;
             totalDevAmount = 0;
@@ -435,8 +440,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         if(totalBonusAmount > 0){
             tmpAmount = totalBonusAmount;
             totalBonusAmount = 0;
-            _safeTransferBNB(address(luckyPower), tmpAmount);
             if(address(luckyPower) != address(0)){
+                _safeTransferBNB(address(luckyPower), tmpAmount);
                 luckyPower.updateBonus(WBNB, tmpAmount);
             }
         } 
@@ -654,7 +659,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // Update the lucky power.
     function setLuckyPower(address _luckyPowerAddr) external onlyAdmin {
-        require(_luckyPowerAddr != address(0), "Zero");
         luckyPower = ILuckyPower(_luckyPowerAddr);
         emit SetLuckyPower(block.number, _luckyPowerAddr);
     }
