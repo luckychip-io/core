@@ -11,9 +11,9 @@ const LCToken = artifacts.require('LCToken');
 const Oracle = artifacts.require('Oracle');
 const Referral = artifacts.require('Referral');
 const DiceToken = artifacts.require('DiceToken');
-const Dice = artifacts.require('Dice');
+const DiceBNB = artifacts.require('DiceBNB');
 
-contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, creater, swapFeeTo]) => {
+contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, creater, swapFeeTo]) => {
     beforeEach(async () => {
         // factory
         this.factory = await LuckyChipFactory.new(creater, { from: creater });
@@ -23,12 +23,11 @@ contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, 
 
         // WBNB
         this.WBNB = await WBNB.new({from: creater});
-        await this.WBNB.deposit({from: creater, value: ethers.utils.parseEther("10")});
 
         // LC
         this.lc = await LCToken.new({ from: creater });
         await this.lc.addMinter(creater, {from: creater});
-        await this.lc.mint(creater, ethers.utils.parseEther("1000000"), { from: creater });
+		await this.lc.mint(creater, ethers.utils.parseEther("1000000"), { from: creater });
         console.log(`lc,${this.lc.address}`);
 
         // Router
@@ -70,9 +69,9 @@ contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, 
 		await this.betMining.add('250', this.WBNB.address, { from: creater });
 
 		// Dice
-		this.diceToken = await DiceToken.new('LuckyChipDice', 'LuckyChipDice', {from: creater});
-		this.dice = await Dice.new(
-			this.lc.address, 
+		this.diceToken = await DiceToken.new('LuckyBNB', 'LuckyBNB', {from: creater});
+		this.dice = await DiceBNB.new(
+			this.WBNB.address, 
 			this.lc.address, 
 			this.diceToken.address, 
 			AddressZero,
@@ -85,23 +84,19 @@ contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, 
 			ethers.utils.parseEther('0.001'),
 			ethers.utils.parseEther('300000000'),
 			{from: creater});
-		await this.lc.addMinter(this.dice.address, {from: creater});
 		await this.diceToken.transferOwnership(this.dice.address, {from: creater});
 		await this.dice.setAdmin(lcAdmin, dev2, lotteryAdmin, {from: creater});
 		await this.dice.setBetMining(this.betMining.address, { from: lcAdmin});
 		await this.betMining.addBetTable(this.dice.address, {from: creater});
     });
     it('real case', async () => {
-        await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: creater});
 		await this.diceToken.approve(this.dice.address, ethers.constants.MaxUint256, {from: creater});
 
 		await time.advanceBlockTo('150');
-		await this.dice.deposit(ethers.utils.parseEther("100000"), {from: creater});
+		await this.dice.deposit({value: ethers.utils.parseEther("2"), from: creater});
 
-		await this.lc.mint(alice, ethers.utils.parseEther("50"), {from: creater});
-		await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: alice});
-		await this.lc.mint(bob, ethers.utils.parseEther("300"), {from: creater});
-		await this.lc.approve(this.dice.address, ethers.constants.MaxUint256, {from: bob});
+		await this.WBNB.approve(this.dice.address, ethers.constants.MaxUint256, {from: alice});
+		await this.WBNB.approve(this.dice.address, ethers.constants.MaxUint256, {from: bob});
 
 		let randomNumber = ethers.utils.hexlify(ethers.utils.randomBytes(32));
 		let bankHash = ethers.utils.keccak256(randomNumber);
@@ -118,8 +113,8 @@ contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, 
 
 		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
 		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());
-		await this.dice.betNumber([false, false, false, false, false, true], ethers.utils.parseEther("50"), referrer, {value: ethers.utils.parseEther("0.001"), from: alice});
-		await this.dice.betNumber([true,true,true,true,true,true], ethers.utils.parseEther("300"), referrer, {value: ethers.utils.parseEther("0.001"), from: bob});
+		await this.dice.betNumber([false, false, false, false, false, true], referrer, {value: ethers.utils.parseEther("0.002"), from: alice});
+		await this.dice.betNumber([true,true,true,true,true,true], referrer, {value: ethers.utils.parseEther("0.007"), from: bob});
 		console.log('alice balance: ', (await this.lc.balanceOf(alice)).toString());		
 		console.log('bob balance: ', (await this.lc.balanceOf(bob)).toString());
 
@@ -174,10 +169,10 @@ contract('Dice', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmin, 
 		await this.dice.withdraw(balance, {from: creater});
 		console.log('bankerAmount',(await this.dice.bankerAmount()).toString());
 
-		await this.betMining.withdraw(0, { from: alice });
-		user = await this.betMining.userInfo(0, alice, {from: alice});
+		await this.betMining.withdraw(1, { from: alice });
+		user = await this.betMining.userInfo(1, alice, {from: alice});
 		console.log(`userInfo,${user[0]},${user[1]},${user[2]},${user[3]},${user[4]}`);
-        result = await this.betMining.poolInfo(0);
+        result = await this.betMining.poolInfo(1);
         console.log(`poolInfo,${result[0]},${result[1]},${result[2]},${result[3]},${result[4]},${result[5]},${result[6]},${result[7]}`);
         let aliceBalance = await this.lc.balanceOf(alice);
         console.log('alice balance: ', aliceBalance.toString());

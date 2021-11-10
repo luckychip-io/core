@@ -432,11 +432,11 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
         if(totalBonusAmount > 0){
             tmpAmount = totalBonusAmount;
             totalBonusAmount = 0;
-            token.safeTransfer(address(luckyPower), tmpAmount);
             if(address(luckyPower) != address(0)){
+                token.safeTransfer(address(luckyPower), tmpAmount);
                 luckyPower.updateBonus(address(token), tmpAmount);
             }
-        } 
+        }
         if(totalLotteryAmount > 0){
             tmpAmount = totalLotteryAmount;
             totalLotteryAmount = 0;
