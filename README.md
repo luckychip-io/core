@@ -10,6 +10,3 @@ The following assumes the use of `node@>=10`.
 
 `yarn compile`
 
-## Run Tests
-
-`yarn test`
