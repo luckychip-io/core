@@ -326,8 +326,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         if (feeAmount > 0){
             _safeTransferBNB(adminAddr, feeAmount);
         }
-        
-        IWBNB(WBNB).deposit{value: amount}();
 
         // Update round data
         round.totalAmount = round.totalAmount.add(amount);
@@ -368,7 +366,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 ledger[epoch][user].claimed = true;
             }
 
-            IWBNB(WBNB).withdraw(rewardAmount);
             _safeTransferBNB(user, rewardAmount);
             emit ClaimReward(user, block.number, rewardAmount);
         }
@@ -423,9 +420,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function _claimBonusAndLottery() internal {
         uint256 tmpAmount = 0;
         uint256 withdrawAmount = totalDevAmount.add(totalBonusAmount).add(totalLotteryAmount);
-        if(withdrawAmount > 0){
-            IWBNB(WBNB).withdraw(withdrawAmount);
-        }
         if(totalDevAmount > 0){
             tmpAmount = totalDevAmount;
             totalDevAmount = 0;
@@ -440,7 +434,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             tmpAmount = totalBonusAmount;
             totalBonusAmount = 0;
             if(address(luckyPower) != address(0)){
-                _safeTransferBNB(address(luckyPower), tmpAmount);
+                IWBNB(WBNB).deposit{value: tmpAmount}();
+                assert(IWBNB(WBNB).transfer(address(luckyPower), tmpAmount));
                 luckyPower.updateBonus(WBNB, tmpAmount);
             }
         } 
@@ -539,7 +534,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 path[0] = WBNB;
                 path[1] = address(lcToken);
                 uint256 amountOut = swapRouter.getAmountsOut(round.burnAmount, path)[1];
-                uint256 lcAmount = swapRouter.swapExactTokensForTokens(round.burnAmount, amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
+                uint256 lcAmount = swapRouter.swapExactETHForTokens{value: round.burnAmount}(amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
                 totalBurnAmount = totalBurnAmount.add(lcAmount);
             }
         }
@@ -582,7 +577,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         require(_tokenAmount > 0, "Amount > 0");
         require(bankerAmount.add(_tokenAmount) < maxBankerAmount, 'maxBankerAmount Limit');
         BankerInfo storage banker = bankerInfo[msg.sender];
-        IWBNB(WBNB).deposit{value: _tokenAmount}();
         uint256 diceTokenAmount = _tokenAmount.mul(1e12).div(netValue);
         diceToken.mint(address(msg.sender), diceTokenAmount);
         uint256 totalDiceTokenAmount = banker.diceTokenAmount.add(diceTokenAmount);
@@ -601,7 +595,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         diceToken.burn(address(diceToken), _diceTokenAmount);
         uint256 tokenAmount = _diceTokenAmount.mul(netValue).div(1e12);
         bankerAmount = bankerAmount.sub(tokenAmount);
-        IWBNB(WBNB).withdraw(tokenAmount);
         if (withdrawFeeRatio > 0 && address(luckyPower) != address(0) && address(oracle) != address(0)){
             uint256 freeAmount = luckyPower.getPower(msg.sender).mul(freeAmountMultiplier);
             uint256 transLcAmount = oracle.getQuantity(WBNB, tokenAmount);
