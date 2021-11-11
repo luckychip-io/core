@@ -24,7 +24,7 @@ contract('DiceBNB', ([alice, bob, referrer, treasury, dev2, lotteryAdmin, lcAdmi
         // WBNB
         this.WBNB = await WBNB.new({from: creater});
 		await this.WBNB.deposit({value: ethers.utils.parseEther("1"), from: creater});
-		await this.WBNB.withdraw(ethers.utils.parseEther("2"), {from: creater});
+		await this.WBNB.withdraw(ethers.utils.parseEther("1"), {from: creater});
 
         // LC
         this.lc = await LCToken.new({ from: creater });

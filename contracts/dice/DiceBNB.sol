@@ -328,7 +328,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         }
         
         IWBNB(WBNB).deposit{value: amount}();
-        assert(IWBNB(WBNB).transfer(address(this), amount));
 
         // Update round data
         round.totalAmount = round.totalAmount.add(amount);
@@ -584,7 +583,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         require(bankerAmount.add(_tokenAmount) < maxBankerAmount, 'maxBankerAmount Limit');
         BankerInfo storage banker = bankerInfo[msg.sender];
         IWBNB(WBNB).deposit{value: _tokenAmount}();
-        assert(IWBNB(WBNB).transfer(address(this), _tokenAmount));
         uint256 diceTokenAmount = _tokenAmount.mul(1e12).div(netValue);
         diceToken.mint(address(msg.sender), diceTokenAmount);
         uint256 totalDiceTokenAmount = banker.diceTokenAmount.add(diceTokenAmount);
