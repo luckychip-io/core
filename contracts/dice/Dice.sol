@@ -347,10 +347,6 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
             betMining.bet(msg.sender, referrer, address(token), amount);
         }
 
-        if(address(luckyPower) != address(0)){
-            luckyPower.updatePower(msg.sender);
-        }
-
         emit BetNumber(msg.sender, currentEpoch, numbers, amount);
     }
 

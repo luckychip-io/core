@@ -347,10 +347,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             betMining.bet(msg.sender, referrer, WBNB, amount);
         }
 
-        if(address(luckyPower) != address(0)){
-            luckyPower.updatePower(msg.sender);
-        }
-
         emit BetNumber(msg.sender, currentEpoch, numbers, amount);
     }
 
@@ -419,7 +415,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // Claim all bonus to LuckyPower
     function _claimBonusAndLottery() internal {
         uint256 tmpAmount = 0;
-        uint256 withdrawAmount = totalDevAmount.add(totalBonusAmount).add(totalLotteryAmount);
         if(totalDevAmount > 0){
             tmpAmount = totalDevAmount;
             totalDevAmount = 0;
