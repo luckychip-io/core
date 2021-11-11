@@ -142,15 +142,15 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         uint256 bonusId = tokenIdMap[bonusToken];
         require(bonusId < bonusInfo.length, "BonusId must be less than bonusInfo length");
 
-        BonusInfo storage bonus = bonusInfo[bonusId];
-        if(bonus.token != bonusToken || quantity <= 0){
-            return;
-        }
-
         uint256 length = EnumerableSet.length(_teamAddrs);
         for(uint256 i = 0; i < length; i ++){
             address teamAddr = EnumerableSet.at(_teamAddrs, i);
             updatePower(teamAddr);
+        }
+
+        BonusInfo storage bonus = bonusInfo[bonusId];
+        if(bonus.token != bonusToken || quantity <= 0){
+            return;
         }
 
         bonus.accRewardPerShare = bonus.accRewardPerShare.add(amount.mul(1e12).div(quantity));
@@ -180,7 +180,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     }
 
     function updatePower(address account) public override{
-        require(account != address(0), "BetMining: bet account is zero address");
+        require(account != address(0), "LuckyPower: account is zero address");
 
         for(uint256 i = 0; i < bonusInfo.length; i ++){
             BonusInfo storage bonus = bonusInfo[i];
@@ -201,14 +201,16 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             uint256 tmpBankerQuantity = 0;
             uint256 tmpValue = 0;
             for(uint256 i = 0; i < poolLength; i ++){
-                if(EnumerableSet.contains(_lpTokens, tokens[i])){
-                    tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
-                    tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                    newQuantity = newQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
-                    tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
-                    tmpBankerQuantity = tmpLpQuantity.add(tmpValue).add(pendingLcAmounts[i]);
-                    newQuantity = newQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                if(amounts[i] > 0){
+                    if(EnumerableSet.contains(_lpTokens, tokens[i])){
+                        tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
+                        tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
+                        newQuantity = newQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
+                    }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
+                        tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
+                        tmpBankerQuantity = tmpLpQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                        newQuantity = newQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                    }
                 }
             }
             user.lpQuantity = tmpLpQuantity;
@@ -258,14 +260,12 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         address[] memory tokens = new address[](length);
         uint256[] memory amounts = new uint256[](length);
         UserInfo storage user = userInfo[account];
-        if (user.quantity > 0) {
-            for(uint256 i = 0; i < length; i ++){
-                BonusInfo storage bonus = bonusInfo[i];
-                UserRewardInfo storage userReward = userRewardInfo[i][account];
-                uint256 pendingReward = user.quantity.mul(bonus.accRewardPerShare).div(1e12).sub(userReward.rewardDebt);
-                tokens[i] = bonus.token;
-                amounts[i] = userReward.pendingReward.add(pendingReward);
-            }
+        for(uint256 i = 0; i < length; i ++){
+            BonusInfo storage bonus = bonusInfo[i];
+            UserRewardInfo storage userReward = userRewardInfo[i][account];
+            uint256 pendingReward = user.quantity.mul(bonus.accRewardPerShare).div(1e12).sub(userReward.rewardDebt);
+            tokens[i] = bonus.token;
+            amounts[i] = userReward.pendingReward.add(pendingReward);
         }
         return (tokens, amounts);
     }
@@ -386,6 +386,10 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
 
     function isTeamAddr(address _teamAddr) public view returns (bool) {
         return EnumerableSet.contains(_teamAddrs, _teamAddr);
+    }
+
+    function isBonusToken(address _token) public view returns (bool) {
+        return EnumerableSet.contains(_tokens, _token);
     }
 
     function getUpdaterLength() public view returns (uint256) {
