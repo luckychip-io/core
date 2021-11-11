@@ -354,7 +354,11 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     function delLpToken(address _delLpToken) public onlyOwner returns (bool) {
         require(_delLpToken != address(0), "Token: _delLpToken is the zero address");
         return EnumerableSet.remove(_lpTokens, _delLpToken);
-    } 
+    }
+
+    function isLpToken(address lpToken) public view returns (bool) {
+        return EnumerableSet.contains(_lpTokens, lpToken);
+    }
 
     function addDiceToken(address _addDiceToken) public onlyOwner returns (bool) {
         require(_addDiceToken != address(0), "Token: _addDiceToken is the zero address");
@@ -366,6 +370,10 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return EnumerableSet.remove(_diceTokens, _delDiceToken);
     }
 
+    function isDiceToken(address diceToken) public view returns (bool) {
+        return EnumerableSet.contains(_diceTokens, diceToken);
+    }
+
     function addTeamAddr(address _teamAddr) public onlyOwner returns (bool) {
         require(_teamAddr != address(0), "Addr: _teamAddr is the zero address");
         return EnumerableSet.add(_teamAddrs, _teamAddr);
@@ -374,7 +382,11 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     function delTeamAddr(address _teamAddr) public onlyOwner returns (bool) {
         require(_teamAddr != address(0), "Addr: _teamAddr is the zero address");
         return EnumerableSet.remove(_teamAddrs, _teamAddr);
-    } 
+    }
+
+    function isTeamAddr(address _teamAddr) public view returns (bool) {
+        return EnumerableSet.contains(_teamAddrs, _teamAddr);
+    }
 
     function getUpdaterLength() public view returns (uint256) {
         return EnumerableSet.length(_updaters);
