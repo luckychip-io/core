@@ -12,6 +12,7 @@ task("accounts", "Prints the list of accounts", async () => {
 });
 
 usePlugin("@nomiclabs/buidler-truffle5");
+usePlugin('buidler-gas-reporter');
 
 // You have to export an object to set up your config
 // This object can have the following optional entries:
@@ -40,6 +41,9 @@ module.exports = {
       port: 7545,
       network_id: "*"
     },
+  },
+  gasReporter: {
+    gasPrice: 5
   },
   paths: {
     sources: "./contracts",
