@@ -92,6 +92,10 @@ contract Oracle is Ownable, IOracle {
         if (pair == address(0)) return 0;
 
         Observation memory observation = pairObservations[pair];
+        if (observation.price0Cumulative == 0 || observation.price1Cumulative == 0){
+            return 0;
+        }
+
         uint256 timeElapsed = block.timestamp - observation.timestamp;
         (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
         (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
