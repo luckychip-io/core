@@ -23,7 +23,7 @@ library LuckyChipLibrary {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'5f68a27f280f52b3c4c512e2eb6e7d6f2e5f12da66d262e49aeb470ad7d78d79' // init code hash
+                hex'259cf16a4d0ef3fc366abd25f2bc863c89b38c0b1f987d3ff3830c5f7facf48f' // init code hash
             ))));
     }
 

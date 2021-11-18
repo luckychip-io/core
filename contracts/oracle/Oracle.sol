@@ -13,6 +13,7 @@ import "../interfaces/IOracle.sol";
 import "../interfaces/IDice.sol";
 import '../interfaces/ILuckyChipFactory.sol';
 import '../interfaces/ILuckyChipPair.sol';
+import "hardhat/console.sol";
 
 contract Oracle is Ownable, IOracle {
     using FixedPoint for *;
@@ -96,6 +97,8 @@ contract Oracle is Ownable, IOracle {
             return 0;
         }
 
+        console.log("consult para,%s,%s,%s", tokenIn, amountIn, tokenOut);
+
         uint256 timeElapsed = block.timestamp - observation.timestamp;
         (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
         (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
@@ -168,6 +171,7 @@ contract Oracle is Ownable, IOracle {
     }
 
     function getLpTokenValue(address _lpToken, uint256 _amount) public override view returns (uint256 value) {
+        console.log("Oracle.getLpTokenValue,%s,%s", _lpToken, _amount);
         uint256 totalSupply = IBEP20(_lpToken).totalSupply();
         address token0 = ILuckyChipPair(_lpToken).token0();
         address token1 = ILuckyChipPair(_lpToken).token1();

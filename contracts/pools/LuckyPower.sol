@@ -14,6 +14,7 @@ import "../interfaces/IBetMining.sol";
 import "../interfaces/IReferral.sol";
 import "../interfaces/ILottery.sol";
 import "../libraries/SafeBEP20.sol";
+import "hardhat/console.sol";
 
 contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
@@ -201,8 +202,10 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             uint256 tmpBankerQuantity = 0;
             uint256 tmpValue = 0;
             for(uint256 i = 0; i < poolLength; i ++){
+                console.log("LuckyPower.loop,%s,%s,%s", account, i, amounts[i]);
                 if(amounts[i] > 0){
                     if(EnumerableSet.contains(_lpTokens, tokens[i])){
+                        console.log("LuckyPower.getLpTokenValue,%s,%s,%s", i, tokens[i], amounts[i]);
                         tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
                         tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
                         newQuantity = newQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
