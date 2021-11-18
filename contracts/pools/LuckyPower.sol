@@ -208,7 +208,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
                         newQuantity = newQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
                     }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
                         tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
-                        tmpBankerQuantity = tmpLpQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                        tmpBankerQuantity = tmpBankerQuantity.add(tmpValue).add(pendingLcAmounts[i]);
                         newQuantity = newQuantity.add(tmpValue).add(pendingLcAmounts[i]);
                     }
                 }
