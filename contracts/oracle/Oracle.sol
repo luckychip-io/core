@@ -13,7 +13,6 @@ import "../interfaces/IOracle.sol";
 import "../interfaces/IDice.sol";
 import '../interfaces/ILuckyChipFactory.sol';
 import '../interfaces/ILuckyChipPair.sol';
-import "hardhat/console.sol";
 
 contract Oracle is Ownable, IOracle {
     using FixedPoint for *;
@@ -28,15 +27,9 @@ contract Oracle is Ownable, IOracle {
         uint256 price1Cumulative;
     }
 
-    struct BlockInfo {
-        uint256 height;
-        uint256 timestamp;
-    }
-
     address public immutable factory;
     address public immutable anchorToken;
     uint256 public constant CYCLE = 30 minutes;
-    BlockInfo public blockInfo;
 
     // mapping from pair address to a list of price observations of that pair
     mapping(address => Observation) public pairObservations;
@@ -64,14 +57,6 @@ contract Oracle is Ownable, IOracle {
         return true;
     }
 
-    function updateBlockInfo() external override returns (bool) {
-        if ((block.number - blockInfo.height) < 1000) return false;
-
-        blockInfo.height = block.number;
-        blockInfo.timestamp = 1000 * block.timestamp;
-        return true;
-    }
-
     function computeAmountOut(
         uint256 priceCumulativeStart,
         uint256 priceCumulativeEnd,
@@ -93,13 +78,10 @@ contract Oracle is Ownable, IOracle {
         if (pair == address(0)) return 0;
 
         Observation memory observation = pairObservations[pair];
-        if (observation.price0Cumulative == 0 || observation.price1Cumulative == 0){
+        uint256 timeElapsed = block.timestamp - observation.timestamp;
+        if(observation.price0Cumulative == 0 || observation.price1Cumulative == 0 || timeElapsed == 0){
             return 0;
         }
-
-        console.log("consult para,%s,%s,%s", tokenIn, amountIn, tokenOut);
-
-        uint256 timeElapsed = block.timestamp - observation.timestamp;
         (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
         (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
 
@@ -171,7 +153,6 @@ contract Oracle is Ownable, IOracle {
     }
 
     function getLpTokenValue(address _lpToken, uint256 _amount) public override view returns (uint256 value) {
-        console.log("Oracle.getLpTokenValue,%s,%s", _lpToken, _amount);
         uint256 totalSupply = IBEP20(_lpToken).totalSupply();
         address token0 = ILuckyChipPair(_lpToken).token0();
         address token1 = ILuckyChipPair(_lpToken).token1();
@@ -193,10 +174,6 @@ contract Oracle is Ownable, IOracle {
         }else{
             value = 0;
         }
-    }
-
-    function getAverageBlockTime() public view returns (uint256) {
-        return (1000 * block.timestamp - blockInfo.timestamp).div(block.number - blockInfo.height);
     }
 
     function addRouterToken(address _token) public onlyOwner returns (bool) {

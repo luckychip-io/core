@@ -221,7 +221,6 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         updatePool(pid);
         if(token != address(rewardToken)){
             oracle.update(token, address(rewardToken));
-            oracle.updateBlockInfo();
         }
 
         UserInfo storage user = userInfo[pid][account];
