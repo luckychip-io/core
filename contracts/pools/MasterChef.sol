@@ -342,10 +342,12 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     function claimLC(uint256 _pid) public nonReentrant validPool(_pid) {
         updatePool(_pid);
         addPendingLC(_pid, msg.sender);
+        PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         if(user.pendingReward > 0){
             uint256 amount = user.pendingReward;
             user.pendingReward = 0;
+            user.rewardDebt = user.amount.mul(pool.accLCPerShare).div(1e12);
             safeLCTransfer(msg.sender, amount);
             if(address(luckyPower) != address(0)){
                 luckyPower.updatePower(msg.sender);
