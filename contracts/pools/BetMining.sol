@@ -160,6 +160,7 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
     }
 
     function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
+        massUpdatePools();
         BONUS_MULTIPLIER = multiplierNumber;
     }
 

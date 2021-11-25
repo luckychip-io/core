@@ -29,7 +29,8 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     struct UserInfo {
         uint256 amount; // How many LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
-        uint256 pendingReward;
+        uint256 pendingReward; // Pending reward to claim
+        uint256 nextWithdrawUntil; // When can the user harvest again.
         //
         // We do some fancy math here. Basically, any point in time, the amount of LCs
         // entitled to a user but is pending to be distributed is:
@@ -49,6 +50,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         uint256 allocPoint; // How many allocation points assigned to this pool. LCs to distribute per block.
         uint256 lastRewardBlock; // Last block number that LCs distribution occurs.
         uint256 accLCPerShare; // Accumulated LCs per share, times 1e12. See below.
+        uint8 poolType; // 0 for LcLp, 1 for NonLcLp, 2 for LcBanker, 3 for NonLcBanker
     }
 
     // 
@@ -94,6 +96,10 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     uint256 public totalAllocPoint = 0;
     // The block number when LC mining starts.
     uint256 public startBlock;
+    // Withdraw interval in seconds
+    uint256 public withdrawInterval = 1 hours;
+    // Max withdraw interval: 1 days.
+    uint256 public constant MAXIMUM_WITHDRAW_INTERVAL = 2 days;
 
     // LuckyChip referral contract address.
     IReferral public referral;
@@ -162,6 +168,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     }
 
     function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
+        massUpdatePools();
         BONUS_MULTIPLIER = multiplierNumber;
     }
 
@@ -183,7 +190,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
 
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add(uint256 _allocPoint, IBEP20 _lpToken) public onlyOwner {
+    function add(uint256 _allocPoint, IBEP20 _lpToken, uint8 _poolType) public onlyOwner {
         _checkPoolDuplicate(_lpToken);
         massUpdatePools();
 
@@ -195,7 +202,8 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                 lpToken: _lpToken,
                 allocPoint: _allocPoint,
                 lastRewardBlock: lastRewardBlock,
-                accLCPerShare: 0
+                accLCPerShare: 0,
+                poolType: _poolType
             })
         );
     }
@@ -289,6 +297,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
             user.amount = user.amount.add(_amount);
         }
         user.rewardDebt = user.amount.mul(pool.accLCPerShare).div(1e12);
+        user.nextWithdrawUntil = block.timestamp.add(withdrawInterval);
         if(address(luckyPower) != address(0)){
             luckyPower.updatePower(msg.sender);
         }
@@ -297,7 +306,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
 
     // Withdraw LP tokens from MasterChef.
     function withdraw(uint256 _pid, uint256 _amount) public nonReentrant validPool(_pid) {
-
+        require(canWithdraw(_pid, msg.sender), "can not withdraw due to time limit");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
@@ -316,6 +325,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint256 _pid) public nonReentrant validPool(_pid) {
+        require(canWithdraw(_pid, msg.sender), "can not withdraw due to time limit");
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
@@ -324,6 +334,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         user.amount = 0;
         user.rewardDebt = 0;
         user.pendingReward = 0;
+        user.nextWithdrawUntil = 0;
         if(address(luckyPower) != address(0)){
             luckyPower.updatePower(msg.sender);
         }
@@ -339,15 +350,26 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         }
     }
 
+    // View function to see if user can withdraw.
+    function canWithdraw(uint256 _pid, address _user) public view returns (bool) {
+        UserInfo storage user = userInfo[_pid][_user];
+        return block.timestamp >= user.nextWithdrawUntil;
+    }
+
     function claimLC(uint256 _pid) public nonReentrant validPool(_pid) {
         updatePool(_pid);
         addPendingLC(_pid, msg.sender);
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        if(user.pendingReward > 0){
+        if(user.pendingReward > 0) {
+            
+
             uint256 amount = user.pendingReward;
             user.pendingReward = 0;
             user.rewardDebt = user.amount.mul(pool.accLCPerShare).div(1e12);
+
+
+
             safeLCTransfer(msg.sender, amount);
             if(address(luckyPower) != address(0)){
                 luckyPower.updatePower(msg.sender);
@@ -438,6 +460,11 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         ecoPercent = _ecoPercent;
         treasuryPercent = _treasuryPercent;
         emit SetPercent(stakingPercent, dev0Percent, dev1Percent, dev2Percent, ecoPercent, treasuryPercent);
+    }
+
+    function setWithdrawInterval(uint256 _withdrawInterval) public onlyOwner{
+        require(_withdrawInterval <= MAXIMUM_WITHDRAW_INTERVAL, "invalid harvest interval");
+        withdrawInterval = _withdrawInterval;
     }
 
     function setReferral(address _lcReferral) public onlyOwner {

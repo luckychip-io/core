@@ -319,8 +319,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        if(maxBetAmount.mul(5) > round.totalAmount.add(amount).sub(maxBetAmount)){
-            require(maxBetAmount.mul(5).sub(round.totalAmount.add(amount).sub(maxBetAmount)) < bankerAmount.mul(maxLostRatio).div(TOTAL_RATE), 'MaxLost Limit');
+        if(maxBetAmount.mul(6) > round.totalAmount.add(amount).sub(maxBetAmount)){
+            require(maxBetAmount.mul(6).sub(round.totalAmount.add(amount).sub(maxBetAmount)) < bankerAmount.mul(maxLostRatio).div(TOTAL_RATE), 'MaxLost Limit');
         }
         
         if (feeAmount > 0){

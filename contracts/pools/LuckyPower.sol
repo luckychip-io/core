@@ -179,6 +179,58 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         }
     }
 
+    // Get pending power from MasterChef and advoid stack too deep
+    function pendingMasterChefPower(address account) internal view returns (uint256, uint256, uint256) {
+        uint256 tmpQuantity = 0;
+        uint256 tmpLpQuantity = 0;
+        uint256 tmpBankerQuantity = 0;
+        if(address(masterChef) != address(0) && address(oracle) != address(0)){
+            (address[] memory tokens, uint256[] memory amounts, uint256[] memory pendingLcAmounts, uint256 devPending, uint256 poolLength) = masterChef.getLuckyPower(account);
+            uint256 tmpValue = 0;
+            for(uint256 i = 0; i < poolLength; i ++){
+                if(amounts[i] > 0){
+                    if(EnumerableSet.contains(_lpTokens, tokens[i])){
+                        tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
+                        tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
+                        tmpQuantity = tmpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
+                    }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
+                        tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
+                        tmpBankerQuantity = tmpBankerQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                        tmpQuantity = tmpQuantity.add(tmpValue).add(pendingLcAmounts[i]);
+                    }
+                }
+            }
+            if(devPending > 0){
+                tmpQuantity = tmpQuantity.add(devPending);
+            }
+        }
+        return (tmpQuantity, tmpLpQuantity, tmpBankerQuantity);
+    }
+
+    function pendingPower(address account) public override view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
+        (uint256 tmpQuantity, uint256 tmpLpQuantity, uint256 tmpBankerQuantity) = pendingMasterChefPower(account);
+
+        uint256 tmpPlayerQuantity = 0;
+        uint256 tmpReferrerQuantity = 0;
+        uint256 tmpLotteryQuantity = 0;
+        if(address(betMining) != address(0)){
+            tmpPlayerQuantity = betMining.getLuckyPower(account);
+            tmpQuantity = tmpQuantity.add(tmpPlayerQuantity);
+        }
+        
+        if(address(referral) != address(0)){
+            tmpReferrerQuantity = referral.getLuckyPower(account);
+            tmpQuantity = tmpQuantity.add(tmpReferrerQuantity);
+        }
+
+        if(address(lottery) != address(0)){
+            tmpLotteryQuantity = lottery.getLuckyPower(account);
+            tmpQuantity = tmpQuantity.add(tmpLotteryQuantity);
+        }
+
+        return (tmpQuantity, tmpLpQuantity, tmpBankerQuantity, tmpPlayerQuantity, tmpReferrerQuantity, tmpLotteryQuantity);
+    }
+
     function updatePower(address account) public override{
         require(account != address(0), "LuckyPower: account is zero address");
 
@@ -189,62 +241,23 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             }
         }
 
-        UserInfo storage user = userInfo[account];
         addPendingRewards(account);
 
-        uint256 tmpQuantity = user.quantity;
-        uint256 newQuantity = 0;
-        if(address(masterChef) != address(0) && address(oracle) != address(0)){
-            (address[] memory tokens, uint256[] memory amounts, uint256[] memory pendingLcAmounts, uint256 devPending, uint256 poolLength) = masterChef.getLuckyPower(account);
-            uint256 tmpLpQuantity = 0;
-            uint256 tmpBankerQuantity = 0;
-            uint256 tmpValue = 0;
-            for(uint256 i = 0; i < poolLength; i ++){
-                if(amounts[i] > 0){
-                    if(EnumerableSet.contains(_lpTokens, tokens[i])){
-                        tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
-                        tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                        newQuantity = newQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                    }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
-                        tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
-                        tmpBankerQuantity = tmpBankerQuantity.add(tmpValue).add(pendingLcAmounts[i]);
-                        newQuantity = newQuantity.add(tmpValue).add(pendingLcAmounts[i]);
-                    }
-                }
-            }
-            user.lpQuantity = tmpLpQuantity;
-            user.bankerQuantity = tmpBankerQuantity;
-            if(devPending > 0){
-                newQuantity = newQuantity.add(devPending);
-            }
-        }else{
-            user.bankerQuantity = 0;
-            user.lpQuantity = 0;
+        (uint256 tmpQuantity, uint256 tmpLpQuantity, uint256 tmpBankerQuantity, uint256 tmpPlayerQuantity, uint256 tmpReferrerQuantity, uint256 tmpLotteryQuantity) = pendingPower(account);
+        if(userInfo[account].quantity != tmpQuantity){
+            quantity = quantity.sub(userInfo[account].quantity).add(tmpQuantity);
         }
 
-        if(address(betMining) != address(0)){
-            user.playerQuantity = betMining.getLuckyPower(account);
-            newQuantity = newQuantity.add(user.playerQuantity);
-        }else{
-            user.playerQuantity = 0;
-        }
-        
-        if(address(referral) != address(0)){
-            user.referrerQuantity = referral.getLuckyPower(account);
-            newQuantity = newQuantity.add(user.referrerQuantity);
-        }else{
-            user.referrerQuantity = 0;
-        }
+        userInfo[account] = UserInfo({
+            quantity: tmpQuantity,
+            lpQuantity: tmpLpQuantity,
+            bankerQuantity: tmpBankerQuantity,
+            playerQuantity: tmpPlayerQuantity,
+            referrerQuantity: tmpReferrerQuantity,
+            lotteryQuantity: tmpLotteryQuantity
+        });
 
-        if(address(lottery) != address(0)){
-            user.lotteryQuantity = lottery.getLuckyPower(account);
-            newQuantity = newQuantity.add(user.lotteryQuantity);
-        }else{
-            user.lotteryQuantity = 0;
-        }
-        user.quantity = newQuantity;
-
-        quantity = quantity.sub(tmpQuantity).add(user.quantity);
+        UserInfo storage user = userInfo[account];
         for(uint256 i = 0; i < bonusInfo.length; i ++){
             BonusInfo storage bonus = bonusInfo[i];
             UserRewardInfo storage userReward = userRewardInfo[i][account];
