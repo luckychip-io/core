@@ -365,13 +365,13 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         return block.timestamp >= user.nextWithdrawUntil;
     }
 
-    function claimRatio(uint256 _pid, address _user) public view returns (uint256 ratio){
+    function getClaimRatio(uint256 _pid, address _user) public view returns (uint256 ratio){
         // claim all LC for poolType = 0 and poolType = 2
         ratio = percentDec;
         PoolInfo storage pool = poolInfo[_pid];
         if(pool.poolType == 1){
             UserInfo storage user = userInfo[_pid][_user];
-            if(address(oracle) != address(0)){
+            if(address(luckyPower) != address(0) && address(oracle) != address(0)){
                 (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
                 uint256 currentPoolPower = pendingLC(_pid, _user);
                 if(totalPower > currentPoolPower){
@@ -388,7 +388,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
             }
         }else if(pool.poolType == 3){
             UserInfo storage user = userInfo[_pid][_user];
-            if(address(oracle) != address(0)){
+            if(address(luckyPower) != address(0) && address(oracle) != address(0)){
                 (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
                 uint256 currentPoolPower = pendingLC(_pid, _user);
                 if(totalPower > currentPoolPower){
@@ -407,7 +407,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     }
 
     function claimLC(uint256 _pid) public nonReentrant validPool(_pid) {
-        uint256 ratio = claimRatio(_pid, msg.sender);
+        uint256 ratio = getClaimRatio(_pid, msg.sender);
         updatePool(_pid);
         addPendingLC(_pid, msg.sender);
         PoolInfo storage pool = poolInfo[_pid];

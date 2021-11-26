@@ -43,10 +43,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public minBetAmount;
     uint256 public maxBetRatio = 5;
     uint256 public maxLostRatio = 300;
-    uint256 public withdrawFeeRatio = 10; // 0.1% for withdrawFee
     uint256 public feeAmount;
     uint256 public maxBankerAmount;
-    uint256 public freeAmountMultiplier = 1;
+    uint256 public maxWithdrawFeeRatio = 20; // 0.1% for withdrawFee
+    uint256 public fullyWithdrawTh = 1000; //the threshold to judge whether a user can withdraw fully, default 10%
 
     address public adminAddr;
     address public devAddr;
@@ -190,12 +190,12 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set ratios
-    function setRatios(uint256 _maxBetRatio, uint256 _maxLostRatio, uint256 _withdrawFeeRatio) external onlyAdmin {
-        require(_maxBetRatio <= 50 && _maxLostRatio <= 500 && _withdrawFeeRatio <= 50, "ratio limit");
+    function setRatios(uint256 _maxBetRatio, uint256 _maxLostRatio, uint256 _maxWithdrawFeeRatio) external onlyAdmin {
+        require(_maxBetRatio <= 50 && _maxLostRatio <= 500 && _maxWithdrawFeeRatio <= 100, "ratio limit");
         maxBetRatio = _maxBetRatio;
         maxLostRatio = _maxLostRatio;
-        withdrawFeeRatio = _withdrawFeeRatio;
-        emit SetRatios(block.number, maxBetRatio, maxLostRatio, withdrawFeeRatio);
+        maxWithdrawFeeRatio = _maxWithdrawFeeRatio;
+        emit SetRatios(block.number, maxBetRatio, maxLostRatio, maxWithdrawFeeRatio);
     }
 
     // set admin address
@@ -207,10 +207,9 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         emit SetAdmin(block.number, adminAddr, devAddr, lotteryAddr);
     }
 
-    function setFreeAmountMultiplier(uint256 _multiplier) external onlyOwner{
-        require(_multiplier >= 1 && _multiplier <= 100, "multiplier range");
-        freeAmountMultiplier = _multiplier;
-        emit SetMultiplier(block.number, _multiplier);
+    function setFullyWithdrawTh(uint256 _fullyWithdrawTh) public onlyOwner {
+        require(_fullyWithdrawTh <= 5000, "range"); // maximum 50%
+        fullyWithdrawTh = _fullyWithdrawTh;
     }
 
     // End banker time
@@ -581,27 +580,45 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         emit Deposit(msg.sender, _tokenAmount);    
     }
 
+    function getWithdrawFeeRatio(address _user) public view returns (uint256 ratio){
+        ratio = 0;
+        if(address(luckyPower) != address(0) && address(oracle) != address(0)){
+            BankerInfo storage banker = bankerInfo[_user];
+            (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
+            uint256 tokenAmount = banker.diceTokenAmount.mul(netValue).div(1e12);
+            uint256 bankerTvl = oracle.getQuantity(WBNB, tokenAmount);
+            if(bankerTvl > 0 && fullyWithdrawTh > 0 && totalPower < bankerTvl.mul(fullyWithdrawTh).div(TOTAL_RATE)){
+                // y = - x * maxWithdrawFeeRatio / fullyWithdrawTh + maxWithdrawFeeRatio
+                uint256 x = totalPower.mul(TOTAL_RATE).div(bankerTvl);
+                ratio = maxWithdrawFeeRatio.sub(x.mul(maxWithdrawFeeRatio).div(fullyWithdrawTh));
+            }
+        }
+    }
+
     // Withdraw syrup from dice to get token back
     function withdraw(uint256 _diceTokenAmount) public whenPaused nonReentrant notContract {
         require(_diceTokenAmount > 0, "diceTokenAmount > 0");
         BankerInfo storage banker = bankerInfo[msg.sender];
+        require(_diceTokenAmount <= banker.diceTokenAmount, "diceTokenAmount <= banker.diceTokenAmount");
+        uint256 ratio = getWithdrawFeeRatio(msg.sender);
         banker.diceTokenAmount = banker.diceTokenAmount.sub(_diceTokenAmount); 
         SafeBEP20.safeTransferFrom(diceToken, msg.sender, address(diceToken), _diceTokenAmount);
         diceToken.burn(address(diceToken), _diceTokenAmount);
         uint256 tokenAmount = _diceTokenAmount.mul(netValue).div(1e12);
         bankerAmount = bankerAmount.sub(tokenAmount);
-        if (withdrawFeeRatio > 0 && address(luckyPower) != address(0) && address(oracle) != address(0)){
-            uint256 freeAmount = luckyPower.getPower(msg.sender).mul(freeAmountMultiplier);
-            uint256 transLcAmount = oracle.getQuantity(WBNB, tokenAmount);
-            if(transLcAmount > freeAmount){
-                uint256 withdrawFee = transLcAmount.sub(freeAmount).mul(tokenAmount).div(transLcAmount).mul(withdrawFeeRatio).div(TOTAL_RATE);
-                tokenAmount = tokenAmount.sub(withdrawFee);
+
+        if(ratio > 0){
+            uint256 withdrawFee = tokenAmount.mul(ratio).div(TOTAL_RATE);
+            if(withdrawFee > 0){
                 _safeTransferBNB(devAddr, withdrawFee);
             }
+            tokenAmount = tokenAmount.sub(withdrawFee);
         }
         
-        _safeTransferBNB(address(msg.sender), tokenAmount);
-
+        if(tokenAmount > 0){
+            _safeTransferBNB(address(msg.sender), tokenAmount);
+        }
+        
         emit Withdraw(msg.sender, _diceTokenAmount);
     }
 
