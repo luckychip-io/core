@@ -22,8 +22,6 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
     EnumerableSet.AddressSet private _tokens;
     EnumerableSet.AddressSet private _updaters;
-    EnumerableSet.AddressSet private _lpTokens;
-    EnumerableSet.AddressSet private _diceTokens;
     EnumerableSet.AddressSet private _teamAddrs;
 
     // Power quantity info of each user.
@@ -53,8 +51,6 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     }
 
     uint256 public quantity;
-    uint256 public constant PERCENT_DEC = 10000;
-    uint256 public lpPercent = 5000;
 
     // Lc token
     IBEP20 public lcToken;
@@ -179,36 +175,8 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         }
     }
 
-    // Get pending power from MasterChef and advoid stack too deep
-    function pendingMasterChefPower(address account) internal view returns (uint256, uint256, uint256) {
-        uint256 tmpQuantity = 0;
-        uint256 tmpLpQuantity = 0;
-        uint256 tmpBankerQuantity = 0;
-        if(address(masterChef) != address(0) && address(oracle) != address(0)){
-            (address[] memory tokens, uint256[] memory amounts, uint256[] memory pendingLcAmounts, uint256 devPending, uint256 poolLength) = masterChef.getLuckyPower(account);
-            uint256 tmpValue = 0;
-            for(uint256 i = 0; i < poolLength; i ++){
-                if(amounts[i] > 0){
-                    if(EnumerableSet.contains(_lpTokens, tokens[i])){
-                        tmpValue = oracle.getLpTokenValue(tokens[i], amounts[i]);
-                        tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                        tmpQuantity = tmpQuantity.add(tmpValue.mul(lpPercent).div(PERCENT_DEC)).add(pendingLcAmounts[i]);
-                    }else if(EnumerableSet.contains(_diceTokens, tokens[i])){
-                        tmpValue = oracle.getDiceTokenValue(tokens[i], amounts[i]);
-                        tmpBankerQuantity = tmpBankerQuantity.add(tmpValue).add(pendingLcAmounts[i]);
-                        tmpQuantity = tmpQuantity.add(tmpValue).add(pendingLcAmounts[i]);
-                    }
-                }
-            }
-            if(devPending > 0){
-                tmpQuantity = tmpQuantity.add(devPending);
-            }
-        }
-        return (tmpQuantity, tmpLpQuantity, tmpBankerQuantity);
-    }
-
     function pendingPower(address account) public override view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        (uint256 tmpQuantity, uint256 tmpLpQuantity, uint256 tmpBankerQuantity) = pendingMasterChefPower(account);
+        (uint256 tmpQuantity, uint256 tmpLpQuantity, uint256 tmpBankerQuantity) = masterChef.getLuckyPower(account);
 
         uint256 tmpPlayerQuantity = 0;
         uint256 tmpReferrerQuantity = 0;
@@ -345,45 +313,12 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         emit SetLottery(_lotteryAddr);
     }
 
-    function setLpPercent(uint256 _percent) public onlyOwner {
-        require(_percent <= PERCENT_DEC, "range");
-        lpPercent = _percent;
-    }
-
     function getLpTokensLength() public view returns (uint256) {
         return EnumerableSet.length(_tokens);
     }
 
     function getLpToken(uint256 _index) public view returns (address) {
         return EnumerableSet.at(_tokens, _index);
-    }
-
-    function addLpToken(address _addLpToken) public onlyOwner returns (bool) {
-        require(_addLpToken != address(0), "Token: _addLpToken is the zero address");
-        return EnumerableSet.add(_lpTokens, _addLpToken);
-    }
-
-    function delLpToken(address _delLpToken) public onlyOwner returns (bool) {
-        require(_delLpToken != address(0), "Token: _delLpToken is the zero address");
-        return EnumerableSet.remove(_lpTokens, _delLpToken);
-    }
-
-    function isLpToken(address lpToken) public view returns (bool) {
-        return EnumerableSet.contains(_lpTokens, lpToken);
-    }
-
-    function addDiceToken(address _addDiceToken) public onlyOwner returns (bool) {
-        require(_addDiceToken != address(0), "Token: _addDiceToken is the zero address");
-        return EnumerableSet.add(_diceTokens, _addDiceToken);
-    }
-
-    function delDiceToken(address _delDiceToken) public onlyOwner returns (bool) {
-        require(_delDiceToken != address(0), "Token: _delDiceToken is the zero address");
-        return EnumerableSet.remove(_diceTokens, _delDiceToken);
-    }
-
-    function isDiceToken(address diceToken) public view returns (bool) {
-        return EnumerableSet.contains(_diceTokens, diceToken);
     }
 
     function addTeamAddr(address _teamAddr) public onlyOwner returns (bool) {

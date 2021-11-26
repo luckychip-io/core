@@ -165,9 +165,9 @@ contract Oracle is Ownable, IOracle {
         value = (token0Value.add(token1Value)).mul(_amount).div(totalSupply);
     }
 
-    function getDiceTokenValue(address _diceToken, uint256 _amount) public override view returns (uint256 value) {
-        if(isDiceToken(_diceToken)){
-            address _dice = diceToken2Dice[_diceToken];
+    function getBankerTokenValue(address _bankerToken, uint256 _amount) public override view returns (uint256 value) {
+        if(isDiceToken(_bankerToken)){
+            address _dice = diceToken2Dice[_bankerToken];
             IDice dice = IDice(_dice);
             uint256 diceTokenAmount = dice.canWithdrawAmount(_amount);
             value = getQuantity(dice.tokenAddr(), diceTokenAmount);

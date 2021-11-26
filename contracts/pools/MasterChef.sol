@@ -10,8 +10,10 @@ import "../interfaces/IBEP20.sol";
 import "../interfaces/IReferral.sol";
 import "../interfaces/ILuckyPower.sol";
 import "../interfaces/IMasterChef.sol";
+import "../interfaces/IOracle.sol";
 import "../libraries/SafeBEP20.sol";
 import "../token/LCToken.sol";
+
 
 // MasterChef is the master of LC. He can make LC and he is a fair guy.
 //
@@ -59,7 +61,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     // The LC TOKEN!
     LCToken public LC;
     //Pools, Farms, Dev, Refs percent decimals
-    uint256 public percentDec = 10000;
+    uint256 public constant percentDec = 10000;
     //Pools and Farms percent from token per block
     uint256 public stakingPercent;
     //Developers percent from token per block
@@ -100,11 +102,14 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     uint256 public withdrawInterval = 1 hours;
     // Max withdraw interval: 1 days.
     uint256 public constant MAXIMUM_WITHDRAW_INTERVAL = 2 days;
+    // the percnet of lp when calculating power
+    uint256 public lpPowerPercent = 5000;
 
     // LuckyChip referral contract address.
     IReferral public referral;
     // LuckyPower contract address.
     ILuckyPower public luckyPower;
+    IOracle public oracle;
     // Referral commission rate in basis points.
     uint16 public referralCommissionRate = 500;
 
@@ -362,13 +367,11 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         if(user.pendingReward > 0) {
-            
-
             uint256 amount = user.pendingReward;
             user.pendingReward = 0;
             user.rewardDebt = user.amount.mul(pool.accLCPerShare).div(1e12);
 
-
+            //(uint256 quantity,,,,,) = luckyPower.pendingPower(msg.sender);
 
             safeLCTransfer(msg.sender, amount);
             if(address(luckyPower) != address(0)){
@@ -378,31 +381,55 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         }
     }
 
-    function getLuckyPower(address user) public override view returns (address[] memory, uint256[] memory, uint256[] memory, uint256, uint256){
-        address[] memory tokens = new address[](poolInfo.length);
-        uint256[] memory amounts = new uint256[](poolInfo.length);
-        uint256[] memory pendingLcAmounts = new uint256[](poolInfo.length);
-        
+    // Get pending power from MasterChef and advoid stack too deep
+    function getLuckyPower(address account) public override view returns (uint256, uint256, uint256) {
+        uint256 tmpQuantity = 0;
+        uint256 tmpLpQuantity = 0;
+        uint256 tmpBankerQuantity = 0;
+        uint256 tmpValue = 0;
         for(uint256 i = 0; i < poolInfo.length; i ++){
-            tokens[i] = address(poolInfo[i].lpToken);
-            amounts[i] = userInfo[i][user].amount;
-            pendingLcAmounts[i] = pendingLC(i, user);
+            if(poolInfo[i].poolType == 0){
+                if(userInfo[i][account].amount > 0 && address(oracle) != address(0)){
+                    tmpValue = oracle.getLpTokenValue(address(poolInfo[i].lpToken), userInfo[i][account].amount);
+                    tmpLpQuantity = tmpLpQuantity.add(tmpValue.mul(lpPowerPercent).div(percentDec));
+                    tmpQuantity = tmpQuantity.add(tmpValue.mul(lpPowerPercent).div(percentDec));
+                }
+                tmpValue = pendingLC(i, account);
+                if(tmpValue > 0){
+                    tmpLpQuantity = tmpLpQuantity.add(tmpValue);
+                    tmpQuantity = tmpQuantity.add(tmpValue);
+                }
+            }else if(poolInfo[i].poolType == 2){
+                if(userInfo[i][account].amount > 0 && address(oracle) != address(0)){
+                    tmpValue = oracle.getBankerTokenValue(address(poolInfo[i].lpToken), userInfo[i][account].amount);
+                    tmpBankerQuantity = tmpBankerQuantity.add(tmpValue);
+                    tmpQuantity = tmpQuantity.add(tmpValue);
+                }
+                tmpValue = pendingLC(i, account);
+                if(tmpValue > 0){
+                    tmpBankerQuantity = tmpBankerQuantity.add(tmpValue);
+                    tmpQuantity = tmpQuantity.add(tmpValue);
+                }
+            }
         }
         uint256 devPending = 0;
-        if(EnumerableSet.contains(_tokenomicAddrs, user)){
-            if(user == dev0Addr){
+        if(EnumerableSet.contains(_tokenomicAddrs, account)){
+            if(account == dev0Addr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dev0Percent).div(percentDec);
-            }else if(user == dev1Addr){
+            }else if(account == dev1Addr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dev1Percent).div(percentDec);
-            }else if(user == dev2Addr){
+            }else if(account == dev2Addr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dev2Percent).div(percentDec);
-            }else if(user == ecoAddr){
+            }else if(account == ecoAddr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(ecoPercent).div(percentDec);
-            }else if(user == treasuryAddr){
+            }else if(account == treasuryAddr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(treasuryPercent).div(percentDec);
             }
         }
-        return (tokens, amounts, pendingLcAmounts, devPending, poolInfo.length);
+        if(devPending > 0){
+            tmpQuantity = tmpQuantity.add(devPending);
+        }
+        return (tmpQuantity, tmpLpQuantity, tmpBankerQuantity);
     }
 
     // get stack amount
@@ -467,10 +494,20 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         withdrawInterval = _withdrawInterval;
     }
 
+    function setLpPowerPercent(uint256 _percent) public onlyOwner {
+        require(_percent <= percentDec, "range");
+        lpPowerPercent = _percent;
+    }
+
     function setReferral(address _lcReferral) public onlyOwner {
         require(_lcReferral != address(0), "Zero");
         referral = IReferral(_lcReferral);
         emit SetLcReferral(_lcReferral);
+    }
+
+    function setOracle(address _oracleAddr) public onlyOwner {
+        require(_oracleAddr != address(0), "Zero");
+        oracle = IOracle(_oracleAddr);
     }
 
     function setLuckyPower(address _luckyPowerAddr) public onlyOwner {
