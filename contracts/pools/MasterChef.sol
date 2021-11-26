@@ -102,8 +102,12 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     uint256 public withdrawInterval = 1 hours;
     // Max withdraw interval: 1 days.
     uint256 public constant MAXIMUM_WITHDRAW_INTERVAL = 2 days;
-    // the percnet of lp when calculating power
+    // the percent of lp when calculating power
     uint256 public lpPowerPercent = 5000;
+    // minimum percent when claiming LC, default 20%
+    uint256 public minClaimPercent = 2000;
+    // the threshold to judge whether a user can claiming LC fully, default 10%
+    uint256 public fullyClaimTh = 1000;
 
     // LuckyChip referral contract address.
     IReferral public referral;
@@ -361,7 +365,49 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         return block.timestamp >= user.nextWithdrawUntil;
     }
 
+    function claimRatio(uint256 _pid, address _user) public view returns (uint256 ratio){
+        // claim all LC for poolType = 0 and poolType = 2
+        ratio = percentDec;
+        PoolInfo storage pool = poolInfo[_pid];
+        if(pool.poolType == 1){
+            UserInfo storage user = userInfo[_pid][_user];
+            if(address(oracle) != address(0)){
+                (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
+                uint256 currentPoolPower = pendingLC(_pid, _user);
+                if(totalPower > currentPoolPower){
+                    uint256 usefulPower = totalPower.sub(currentPoolPower);
+                    uint256 lpValue = oracle.getLpTokenValue(address(pool.lpToken), user.amount);
+                    if(lpValue > 0 && fullyClaimTh > 0 && usefulPower < lpValue.mul(fullyClaimTh).div(percentDec)){
+                        // y = minClaimPercent + x * (10000 - minClaimPercent) / fullyClaimTh
+                        uint256 x = usefulPower.mul(percentDec).div(lpValue);
+                        ratio = minClaimPercent + (percentDec.sub(minClaimPercent)).mul(x).div(fullyClaimTh);
+                    }
+                }else{
+                    ratio = minClaimPercent;
+                }
+            }
+        }else if(pool.poolType == 3){
+            UserInfo storage user = userInfo[_pid][_user];
+            if(address(oracle) != address(0)){
+                (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
+                uint256 currentPoolPower = pendingLC(_pid, _user);
+                if(totalPower > currentPoolPower){
+                    uint256 usefulPower = totalPower.sub(currentPoolPower);
+                    uint256 bankerValue = oracle.getBankerTokenValue(address(pool.lpToken), user.amount);
+                    if(bankerValue > 0 && fullyClaimTh > 0 && usefulPower < bankerValue.mul(fullyClaimTh).div(percentDec)){
+                        // y = x * (10000 - minClaimPercent) / fullyClaimTh + minClaimPercent
+                        uint256 x = usefulPower.mul(percentDec).div(bankerValue);
+                        ratio = (percentDec.sub(minClaimPercent)).mul(x).div(fullyClaimTh).add(minClaimPercent);
+                    }
+                }else{
+                    ratio = minClaimPercent;
+                }
+            }
+        }
+    }
+
     function claimLC(uint256 _pid) public nonReentrant validPool(_pid) {
+        uint256 ratio = claimRatio(_pid, msg.sender);
         updatePool(_pid);
         addPendingLC(_pid, msg.sender);
         PoolInfo storage pool = poolInfo[_pid];
@@ -371,9 +417,19 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
             user.pendingReward = 0;
             user.rewardDebt = user.amount.mul(pool.accLCPerShare).div(1e12);
 
-            //(uint256 quantity,,,,,) = luckyPower.pendingPower(msg.sender);
+            if(ratio < percentDec){
+                uint256 tmpAmount = amount.mul(percentDec.sub(ratio)).div(percentDec);
+                if(tmpAmount > 0){
+                    safeLCTransfer(treasuryAddr, tmpAmount);
+                }
+                amount = amount.sub(tmpAmount);
+                if(amount > 0){
+                    safeLCTransfer(msg.sender, amount);    
+                }
+            }else{
+                safeLCTransfer(msg.sender, amount);
+            }
 
-            safeLCTransfer(msg.sender, amount);
             if(address(luckyPower) != address(0)){
                 luckyPower.updatePower(msg.sender);
             }
@@ -399,12 +455,24 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                     tmpLpQuantity = tmpLpQuantity.add(tmpValue);
                     tmpQuantity = tmpQuantity.add(tmpValue);
                 }
+            }else if(poolInfo[i].poolType == 1){
+                tmpValue = pendingLC(i, account);
+                if(tmpValue > 0){
+                    tmpLpQuantity = tmpLpQuantity.add(tmpValue);
+                    tmpQuantity = tmpQuantity.add(tmpValue);
+                }
             }else if(poolInfo[i].poolType == 2){
                 if(userInfo[i][account].amount > 0 && address(oracle) != address(0)){
                     tmpValue = oracle.getBankerTokenValue(address(poolInfo[i].lpToken), userInfo[i][account].amount);
                     tmpBankerQuantity = tmpBankerQuantity.add(tmpValue);
                     tmpQuantity = tmpQuantity.add(tmpValue);
                 }
+                tmpValue = pendingLC(i, account);
+                if(tmpValue > 0){
+                    tmpBankerQuantity = tmpBankerQuantity.add(tmpValue);
+                    tmpQuantity = tmpQuantity.add(tmpValue);
+                }
+            }else if(poolInfo[i].poolType == 3){
                 tmpValue = pendingLC(i, account);
                 if(tmpValue > 0){
                     tmpBankerQuantity = tmpBankerQuantity.add(tmpValue);
@@ -497,6 +565,16 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     function setLpPowerPercent(uint256 _percent) public onlyOwner {
         require(_percent <= percentDec, "range");
         lpPowerPercent = _percent;
+    }
+
+    function setMinClaimPercent(uint256 _minClaimPercent) public onlyOwner {
+        require(_minClaimPercent <= percentDec, "range");
+        minClaimPercent = _minClaimPercent;
+    }
+
+    function setFullyClaimTh(uint256 _fullyClaimTh) public onlyOwner {
+        require(_fullyClaimTh <= 5000, "range"); // maximum 50%
+        fullyClaimTh = _fullyClaimTh;
     }
 
     function setReferral(address _lcReferral) public onlyOwner {
