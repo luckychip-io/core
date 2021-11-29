@@ -250,6 +250,18 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return (tokens, amounts);
     }
 
+    function pendingRewardsBUSD(address account) public view returns (uint256) {
+        UserInfo storage user = userInfo[account];
+        uint256 totalBonus = 0;
+        for(uint256 i = 0; i < bonusInfo.length; i ++){
+            BonusInfo storage bonus = bonusInfo[i];
+            UserRewardInfo storage userReward = userRewardInfo[i][account];
+            uint256 pendingReward = user.quantity.mul(bonus.accRewardPerShare).div(1e12).sub(userReward.rewardDebt);
+            totalBonus = totalBonus.add(oracle.getQuantityBUSD(bonus.token, userReward.pendingReward.add(pendingReward)));
+        }
+        return totalBonus;
+    }
+
     function withdraw() public nonReentrant {
         address account = msg.sender;
         addPendingRewards(account);

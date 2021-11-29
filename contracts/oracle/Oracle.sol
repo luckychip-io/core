@@ -29,6 +29,7 @@ contract Oracle is Ownable, IOracle {
 
     address public immutable factory;
     address public immutable anchorToken;
+    address public immutable BUSD;
     uint256 public constant CYCLE = 30 minutes;
 
     // mapping from pair address to a list of price observations of that pair
@@ -37,9 +38,10 @@ contract Oracle is Ownable, IOracle {
     // mapping from diceToken to dice
     mapping(address => address) public diceToken2Dice;
 
-    constructor(address _factory, address _anchorToken) public {
+    constructor(address _factory, address _anchorToken, address _BUSD) public {
         factory = _factory;
         anchorToken = _anchorToken;
+        BUSD = _BUSD;
     }
 
     function update(address tokenA, address tokenB) external override returns (bool) {
@@ -99,6 +101,15 @@ contract Oracle is Ownable, IOracle {
             quantity = amount;
         } else {
             quantity = getAveragePrice(token).mul(amount).div(10**decimal);
+        }
+    }
+
+    function getQuantityBUSD(address token, uint256 amount) public override view returns (uint256 quantity) {
+        if (token == BUSD) {
+            quantity = amount;
+        } else {
+            uint256 anchorQuantity = getQuantity(token, amount);
+            quantity = consult(anchorToken, anchorQuantity, BUSD);
         }
     }
 

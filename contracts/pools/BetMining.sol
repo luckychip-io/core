@@ -436,4 +436,16 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
     function getPoolLength() public view returns (uint256) {
         return poolInfo.length;
     }
+
+    function getAllQuantityBUSD(address account) public view returns (uint256){
+        uint256 tmpQuantity = 0;
+        for(uint256 i = 0; i < poolInfo.length; i++){
+            tmpQuantity = tmpQuantity.add(userInfo[i][account].quantity);
+        }
+        if(tmpQuantity > 0){
+            return oracle.getQuantityBUSD(address(rewardToken), tmpQuantity);
+        }else{
+            return 0;
+        }
+    }
 }
