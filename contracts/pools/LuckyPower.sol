@@ -235,7 +235,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         emit UpdatePower(account, user.quantity);
     }
 
-    function pendingRewards(address account) public view returns (address[] memory, uint256[] memory) {
+    function pendingRewards(address account) public view returns (address[] memory, uint256[] memory, uint256) {
         uint256 length = bonusInfo.length;
         address[] memory tokens = new address[](length);
         uint256[] memory amounts = new uint256[](length);
@@ -247,7 +247,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             tokens[i] = bonus.token;
             amounts[i] = userReward.pendingReward.add(pendingReward);
         }
-        return (tokens, amounts);
+        return (tokens, amounts, length);
     }
 
     function pendingRewardsBUSD(address account) public view returns (uint256) {

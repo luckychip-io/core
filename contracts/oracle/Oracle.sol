@@ -81,16 +81,26 @@ contract Oracle is Ownable, IOracle {
 
         Observation memory observation = pairObservations[pair];
         uint256 timeElapsed = block.timestamp - observation.timestamp;
-        if(observation.price0Cumulative == 0 || observation.price1Cumulative == 0 || timeElapsed == 0){
+        if(observation.price0Cumulative == 0 || observation.price1Cumulative == 0){
             return 0;
         }
-        (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
-        (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
+        if(timeElapsed == 0){
+            (uint112 reserve0, uint112 reserve1,) = ILuckyChipPair(pair).getReserves();
+            (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
+            if (token0 == tokenIn) {
+                return (reserve0 != 0) ? uint256(reserve1).mul(amountIn).div(uint256(reserve0)) : 0;
+            }else{
+                return (reserve1 != 0) ? uint256(reserve0).mul(amountIn).div(uint256(reserve1)) : 0;
+            }
+        }else{
+            (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
+            (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
 
-        if (token0 == tokenIn) {
-            return computeAmountOut(observation.price0Cumulative, price0Cumulative, timeElapsed, amountIn);
-        } else {
-            return computeAmountOut(observation.price1Cumulative, price1Cumulative, timeElapsed, amountIn);
+            if (token0 == tokenIn) {
+                return computeAmountOut(observation.price0Cumulative, price0Cumulative, timeElapsed, amountIn);
+            } else {
+                return computeAmountOut(observation.price1Cumulative, price1Cumulative, timeElapsed, amountIn);
+            }
         }
     }
 

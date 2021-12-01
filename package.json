@@ -30,7 +30,6 @@
     "truffle-flattener": "^1.4.4"
   },
   "devDependencies": {
-    "@ethersproject/experimental": "^5.0.1",
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-etherscan": "^2.1.2",
     "@nomiclabs/hardhat-truffle5": "^2.0.1",
