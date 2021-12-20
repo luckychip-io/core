@@ -63,6 +63,12 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     // user pending bonus 
     mapping(uint256 => mapping(address => UserRewardInfo)) public userRewardInfo;
 
+    uint256 withdrawLpBonus;
+    uint256 withdrawBankerBonus;
+    uint256 withdrawPlayerBonus;
+    uint256 withdrawReferrerBonus;
+    uint256 withdrawLotteryBonus;
+
     IOracle public oracle;
     IMasterChef public masterChef;
     IBetMining public betMining;
@@ -89,7 +95,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return EnumerableSet.remove(_updaters, _delUpdater);
     } 
 
-    event UpdatePower(address indexed user, uint256 quantity);
+    event UpdatePower(address indexed user, uint256 quantity, uint256 lpQuantity, uint256 bankerQuantity, uint256 playerQuantity, uint256 referrerQuantity, uint256 lotteryQuantity);
     event Withdraw(address indexed user);
     event EmergencyWithdraw(address indexed user);
     event SetMasterChef(address indexed _masterChefAddr);
@@ -225,14 +231,13 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             lotteryQuantity: tmpLotteryQuantity
         });
 
-        UserInfo storage user = userInfo[account];
         for(uint256 i = 0; i < bonusInfo.length; i ++){
             BonusInfo storage bonus = bonusInfo[i];
             UserRewardInfo storage userReward = userRewardInfo[i][account];
-            userReward.rewardDebt = user.quantity.mul(bonus.accRewardPerShare).div(1e12);
+            userReward.rewardDebt = tmpQuantity.mul(bonus.accRewardPerShare).div(1e12);
         }
 
-        emit UpdatePower(account, user.quantity);
+        emit UpdatePower(account, tmpQuantity, tmpLpQuantity, tmpBankerQuantity, tmpPlayerQuantity, tmpReferrerQuantity, tmpLotteryQuantity);
     }
 
     function pendingRewards(address account) public view returns (address[] memory, uint256[] memory, uint256) {
@@ -267,13 +272,22 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         addPendingRewards(account);
 
         uint256 tmpReward = 0;
+        uint256 totalRewards = 0;
         for(uint256 i = 0; i < bonusInfo.length; i ++){
             BonusInfo storage bonus = bonusInfo[i];
             UserRewardInfo storage userReward = userRewardInfo[i][account];
             tmpReward = userReward.pendingReward;
             userReward.pendingReward = 0;
             IBEP20(bonus.token).safeTransfer(account, tmpReward);
+            totalRewards = totalRewards.add(oracle.getQuantityBUSD(bonus.token, tmpReward));
         }
+
+        UserInfo storage user = userInfo[account];
+        withdrawLpBonus = withdrawLpBonus.add(totalRewards.mul(user.lpQuantity).div(quantity));
+        withdrawBankerBonus = withdrawBankerBonus.add(totalRewards.mul(user.bankerQuantity).div(quantity));
+        withdrawPlayerBonus = withdrawPlayerBonus.add(totalRewards.mul(user.playerQuantity).div(quantity));
+        withdrawReferrerBonus = withdrawReferrerBonus.add(totalRewards.mul(user.referrerQuantity).div(quantity));
+        withdrawLotteryBonus = withdrawLotteryBonus.add(totalRewards.mul(user.lotteryQuantity).div(quantity));
 
         updatePower(account);
         emit Withdraw(msg.sender);

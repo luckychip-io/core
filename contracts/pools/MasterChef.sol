@@ -604,12 +604,10 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                 if (commissionAmount > 0) {
                     if (referrer != address(0)){
                         LC.mint(address(referral), commissionAmount);
-                        referral.recordLpCommission(referrer, commissionAmount);
-                        emit ReferralCommissionPaid(_user, referrer, commissionAmount);
+                        referral.recordLpCommission(_user, referrer, commissionAmount);
                     }else{
                         LC.mint(address(referral), commissionAmount);
-                        referral.recordLpCommission(treasuryAddr, commissionAmount);
-                        emit ReferralCommissionPaid(_user, treasuryAddr, commissionAmount);
+                        referral.recordLpCommission(_user, treasuryAddr, commissionAmount);
                     }
                 }
             }else{
@@ -619,6 +617,30 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                     emit ReferralCommissionPaid(_user, treasuryAddr, commissionAmount);
                 }
             }
+        }
+    }
+
+    // Get Tvl from MasterChef
+    function getTvlBusd() public view returns (uint256) {
+        if(address(oracle) != address(0)){
+            uint256 tvlLC = 0;
+            for(uint256 i = 0; i < poolInfo.length; i ++){
+                uint256 lpSupply = poolInfo[i].lpToken.balanceOf(address(this));
+                if(lpSupply > 0){
+                    if(poolInfo[i].poolType == 0 || poolInfo[i].poolType == 1){
+                        tvlLC = tvlLC.add(oracle.getLpTokenValue(address(poolInfo[i].lpToken), lpSupply));
+                    }else if(poolInfo[i].poolType == 2 || poolInfo[i].poolType == 3){
+                        tvlLC = tvlLC.add(oracle.getBankerTokenValue(address(poolInfo[i].lpToken), lpSupply));
+                    }
+                }
+            }
+            if(tvlLC > 0){
+                return oracle.getQuantityBUSD(address(LC), tvlLC);
+            }else{
+                return 0;
+            } 
+        }else{
+            return 0;
         }
     }
 }

@@ -19,6 +19,7 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
     EnumerableSet.AddressSet private _operators; 
     IBEP20 public lcToken;
     ILuckyPower public luckyPower;
+    uint256 public accCommission;
 
     struct ReferrerInfo{
         uint256 lpCommission;
@@ -34,14 +35,13 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
     mapping(address => ReferrerInfo) public referrerInfo; // referrer address => Referrer Info
 
     event ReferrerRecorded(address indexed user, address indexed referrer);
-    event LpCommissionRecorded(address indexed referrer, uint256 commission);
-    event BetCommissionRecorded(address indexed referrer, uint256 commission);
-    event RankCommissionRecorded(address indexed referrer, uint256 commission);
+    event LpCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
+    event BetCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
+    event RankCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
     event ClaimLpCommission(address indexed referrer, uint256 amount);
     event ClaimBetCommission(address indexed referrer, uint256 amount);
     event ClaimRankCommission(address indexed referrer, uint256 amount);
     event SetLuckyPower(address indexed _luckyPowerAddr);
-
 
     constructor(address _lcTokenAddr) public {
         lcToken = IBEP20(_lcTokenAddr);
@@ -79,33 +79,36 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
         }
     }
 
-    function recordLpCommission(address _referrer, uint256 _commission) public override onlyOperator {
+    function recordLpCommission(address _user, address _referrer, uint256 _commission) public override onlyOperator {
         if (_referrer != address(0) && _commission > 0) {
             ReferrerInfo storage info = referrerInfo[_referrer];
             info.lpCommission = info.lpCommission.add(_commission);
             info.pendingLpCommission = info.pendingLpCommission.add(_commission);
+            accCommission = accCommission.add(_commission);
 
-            emit LpCommissionRecorded(_referrer, _commission);
+            emit LpCommissionRecorded(_user, _referrer, _commission);
         }
     }
 
-    function recordBetCommission(address _referrer, uint256 _commission) public override onlyOperator {
+    function recordBetCommission(address _user, address _referrer, uint256 _commission) public override onlyOperator {
         if (_referrer != address(0) && _commission > 0) {
             ReferrerInfo storage info = referrerInfo[_referrer];
             info.betCommission = info.betCommission.add(_commission);
             info.pendingBetCommission = info.pendingBetCommission.add(_commission);
+            accCommission = accCommission.add(_commission);
             
-            emit BetCommissionRecorded(_referrer, _commission);
+            emit BetCommissionRecorded(_user, _referrer, _commission);
         }
     }
 
-    function recordRankCommission(address _referrer, uint256 _commission) public override onlyOperator {
+    function recordRankCommission(address _user, address _referrer, uint256 _commission) public override onlyOperator {
         if (_referrer != address(0) && _commission > 0) {
             ReferrerInfo storage info = referrerInfo[_referrer];
             info.rankCommission = info.rankCommission.add(_commission);
             info.pendingRankCommission = info.pendingRankCommission.add(_commission);
+            accCommission = accCommission.add(_commission);
             
-            emit RankCommissionRecorded(_referrer, _commission);
+            emit RankCommissionRecorded(_user, _referrer, _commission);
         }
     }
 
@@ -171,4 +174,5 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
         luckyPower = ILuckyPower(_luckyPowerAddr);
         emit SetLuckyPower(_luckyPowerAddr);
     }
+
 }

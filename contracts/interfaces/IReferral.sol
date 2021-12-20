@@ -11,17 +11,17 @@ interface IReferral {
     /**
      * @dev Record lp referral commission.
      */
-    function recordLpCommission(address referrer, uint256 commission) external;
+    function recordLpCommission(address user, address referrer, uint256 commission) external;
 
     /**
      * @dev Record bet referral commission.
      */
-    function recordBetCommission(address referrer, uint256 commission) external;
+    function recordBetCommission(address user, address referrer, uint256 commission) external;
 
     /**
      * @dev Record rank referral commission.
      */
-    function recordRankCommission(address referrer, uint256 commission) external;
+    function recordRankCommission(address user, address referrer, uint256 commission) external;
 
     /**
      * @dev Get the referrer address that referred the user.

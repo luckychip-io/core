@@ -57,8 +57,6 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
     mapping(address => uint256) public tokenOfPid;
     // Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
-
-    uint256 public totalQuantity = 0;
     // The block number when reward token mining starts.
     uint256 public startBlock;
     // Treasury fund.
@@ -229,7 +227,6 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
 
         pool.quantity = pool.quantity.add(quantity);
         pool.accQuantity = pool.accQuantity.add(quantity);
-        totalQuantity = totalQuantity.add(quantity);
         user.quantity = user.quantity.add(quantity);
         user.accQuantity = user.accQuantity.add(quantity);
         user.rewardDebt = user.quantity.mul(pool.accRewardPerShare).div(1e12);
@@ -369,10 +366,10 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
                 if (commissionAmount > 0) {
                     if (referrer != address(0)){
                         rewardToken.mint(address(referral), commissionAmount);
-                        referral.recordBetCommission(referrer, commissionAmount);
+                        referral.recordBetCommission(_user, referrer, commissionAmount);
                     }else{
                         rewardToken.mint(address(referral), commissionAmount);
-                        referral.recordBetCommission(defaultReferrer, commissionAmount);
+                        referral.recordBetCommission(_user, defaultReferrer, commissionAmount);
                     }
                 }
             }else{
@@ -437,11 +434,28 @@ contract BetMining is IBetMining, Ownable, ReentrancyGuard {
         return poolInfo.length;
     }
 
+    function getTotalQuantity() public view returns (uint256) {
+        uint256 tmpQuantity = 0;
+        for(uint256 i = 0; i < poolInfo.length; i++){
+            tmpQuantity = tmpQuantity.add(poolInfo[i].quantity);
+        }
+        return tmpQuantity;
+    }
+
     function getAllQuantityBUSD(address account) public view returns (uint256){
         uint256 tmpQuantity = 0;
         for(uint256 i = 0; i < poolInfo.length; i++){
             tmpQuantity = tmpQuantity.add(userInfo[i][account].quantity);
         }
+        if(tmpQuantity > 0){
+            return oracle.getQuantityBUSD(address(rewardToken), tmpQuantity);
+        }else{
+            return 0;
+        }
+    }
+
+    function getPoolQuantityBUSD() public view returns (uint256){
+        uint256 tmpQuantity = getTotalQuantity();
         if(tmpQuantity > 0){
             return oracle.getQuantityBUSD(address(rewardToken), tmpQuantity);
         }else{

@@ -29,6 +29,10 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
     uint256 secondPrizeAmount;
     uint256 thirdPrizeAmount;
 
+    uint256 accFirstPrizeAmount;
+    uint256 accSecondPrizeAmount;
+    uint256 accThirdPrizeAmount;
+
     mapping(address => LotteryInfo) public lotteryInfo;
     IBEP20 public lcToken;
     ILuckyPower public luckyPower;
@@ -69,6 +73,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
             info.accAmount = info.accAmount.add(tmpAmount);
             info.firstPrizeAmount = info.firstPrizeAmount.add(tmpAmount);
         }
+        accFirstPrizeAmount = accFirstPrizeAmount.add(amount);
         
         emit InjectFirstPrize(msg.sender, dst, block.number, amount); 
     }
@@ -85,6 +90,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
             info.accAmount = info.accAmount.add(tmpAmount);
             info.secondPrizeAmount = info.secondPrizeAmount.add(tmpAmount);
         }
+        accSecondPrizeAmount = accSecondPrizeAmount.add(amount);
         
         emit InjectSecondPrize(msg.sender, dst, block.number, amount); 
     }
@@ -101,6 +107,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
             info.accAmount = info.accAmount.add(tmpAmount);
             info.thirdPrizeAmount = info.thirdPrizeAmount.add(tmpAmount);
         }
+        accThirdPrizeAmount = accThirdPrizeAmount.add(amount);
         
         emit InjectThirdPrize(msg.sender, dst, block.number, amount); 
     }
@@ -133,6 +140,10 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
 
     function getThirdPrize() external view returns (address[] memory, uint256, uint256){
         return (thirdPrizeAddrs, thirdPrizeAddrs.length, thirdPrizeAmount);
+    }
+
+    function getAccPrize() external view returns (uint256, uint256, uint256){
+        return (accFirstPrizeAmount, accSecondPrizeAmount, accThirdPrizeAmount);
     }
     
     function getLuckyPower(address user) external override view returns (uint256){

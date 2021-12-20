@@ -440,23 +440,33 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
         }
     }
 
+    function getUserRoundCount(address user) external view returns (uint256){
+        return userRounds[user].length;
+    }
+
+    function getUserAllRounds(address user) external view returns (uint256, uint256[] memory){
+        return (userRounds[user].length, userRounds[user]);
+    }
+
     // Return round epochs that a user has participated
     function getUserRounds(
         address user,
-        uint256 cursor,
-        uint256 size
-    ) external view returns (uint256[] memory, uint256) {
-        uint256 length = size;
-        if (length > userRounds[user].length - cursor) {
-            length = userRounds[user].length - cursor;
+        uint256 fromIndex,
+        uint256 toIndex
+    ) external view returns (uint256, uint256[] memory) {
+        uint256 realToIndex = toIndex;
+        if(realToIndex > userRounds[user].length){
+            realToIndex = userRounds[user].length;
         }
 
-        uint256[] memory values = new uint256[](length);
-        for (uint256 i = 0; i < length; i++) {
-            values[i] = userRounds[user][cursor.add(i)];
+        if(fromIndex < realToIndex){
+            uint256 length = realToIndex - fromIndex;
+            uint256[] memory values = new uint256[](length);
+            for (uint256 i = 0; i < length; i++) {
+                values[i] = userRounds[user][fromIndex.add(i)];
+            }
+            return (length, values);
         }
-
-        return (values, cursor.add(length));
     }
 
     // Return user bet info
@@ -684,6 +694,14 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
 
     function tokenAddr() public override view returns (address){
         return address(token);
+    }
+
+    function getBankerTvlBUSD() public view returns (uint256){
+        if(bankerAmount > 0){
+            return oracle.getQuantityBUSD(address(token), bankerAmount);
+        }else{
+            return 0;
+        }
     }
 }
 
