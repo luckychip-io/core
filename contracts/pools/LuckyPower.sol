@@ -63,11 +63,11 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
     // user pending bonus 
     mapping(uint256 => mapping(address => UserRewardInfo)) public userRewardInfo;
 
-    uint256 withdrawLpBonus;
-    uint256 withdrawBankerBonus;
-    uint256 withdrawPlayerBonus;
-    uint256 withdrawReferrerBonus;
-    uint256 withdrawLotteryBonus;
+    uint256 public withdrawLpBonus;
+    uint256 public withdrawBankerBonus;
+    uint256 public withdrawPlayerBonus;
+    uint256 public withdrawReferrerBonus;
+    uint256 public withdrawLotteryBonus;
 
     IOracle public oracle;
     IMasterChef public masterChef;

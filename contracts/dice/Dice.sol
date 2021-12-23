@@ -540,7 +540,8 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
                 path[0] = address(token);
                 path[1] = address(lcToken);
                 uint256 amountOut = swapRouter.getAmountsOut(round.burnAmount, path)[1];
-                uint256 lcAmount = swapRouter.swapExactTokensForTokens(round.burnAmount, amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
+                token.safeApprove(address(swapRouter), round.burnAmount);
+                uint256 lcAmount = swapRouter.swapExactTokensForTokens(round.burnAmount, amountOut.mul(2).div(10), path, address(this), block.timestamp + (5 minutes))[1];
                 totalBurnAmount = totalBurnAmount.add(lcAmount);
             }
         }
