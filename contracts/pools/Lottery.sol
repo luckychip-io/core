@@ -29,17 +29,17 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
     uint256 secondPrizeAmount;
     uint256 thirdPrizeAmount;
 
-    uint256 accFirstPrizeAmount;
-    uint256 accSecondPrizeAmount;
-    uint256 accThirdPrizeAmount;
+    uint256 public accFirstPrizeAmount;
+    uint256 public accSecondPrizeAmount;
+    uint256 public accThirdPrizeAmount;
 
     mapping(address => LotteryInfo) public lotteryInfo;
     IBEP20 public lcToken;
     ILuckyPower public luckyPower;
 
-    event InjectFirstPrize(address indexed src, address[] dst, uint256 blockNumber, uint256 amount);
-    event InjectSecondPrize(address indexed src, address[] dst, uint256 blockNumber, uint256 amount);
-    event InjectThirdPrize(address indexed src, address[] dst, uint256 blockNumber, uint256 amount);
+    event InjectFirstPrize(address indexed src, uint256 blockNumber, uint256 amount, address[] dst, uint256 length);
+    event InjectSecondPrize(address indexed src, uint256 blockNumber, uint256 amount, address[] dst, uint256 length);
+    event InjectThirdPrize(address indexed src, uint256 blockNumber, uint256 amount, address[] dst, uint256 length);
     event ClaimLottery(address indexed user, uint256 blockNumber, uint256 amount);
     event SetLuckyPower(uint256 indexed block, address luckyPowerAddr);
 
@@ -75,7 +75,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
         }
         accFirstPrizeAmount = accFirstPrizeAmount.add(amount);
         
-        emit InjectFirstPrize(msg.sender, dst, block.number, amount); 
+        emit InjectFirstPrize(msg.sender, block.number, amount, dst, dst.length); 
     }
 
     function injectSecondPrize(address[] calldata dst, uint256 amount) public nonReentrant notContract {
@@ -92,7 +92,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
         }
         accSecondPrizeAmount = accSecondPrizeAmount.add(amount);
         
-        emit InjectSecondPrize(msg.sender, dst, block.number, amount); 
+        emit InjectSecondPrize(msg.sender, block.number, amount, dst, dst.length);
     }
 
     function injectThirdPrize(address[] calldata dst, uint256 amount) public nonReentrant notContract {
@@ -109,7 +109,7 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
         }
         accThirdPrizeAmount = accThirdPrizeAmount.add(amount);
         
-        emit InjectThirdPrize(msg.sender, dst, block.number, amount); 
+        emit InjectThirdPrize(msg.sender, block.number, amount, dst, dst.length); 
     }
 
     function claimLottery() external nonReentrant notContract{
