@@ -35,9 +35,9 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
     mapping(address => ReferrerInfo) public referrerInfo; // referrer address => Referrer Info
 
     event ReferrerRecorded(address indexed user, address indexed referrer);
-    event LpCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
-    event BetCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
-    event RankCommissionRecorded(address indexed user, address indexed referrer, uint256 commission);
+    event LpCommissionRecorded(address indexed user, address indexed referrer, uint256 commission, uint256 lpCommission, uint256 betCommission, uint256 rankCommission);
+    event BetCommissionRecorded(address indexed user, address indexed referrer, uint256 commission, uint256 lpCommission, uint256 betCommission, uint256 rankCommission);
+    event RankCommissionRecorded(address indexed user, address indexed referrer, uint256 commission, uint256 lpCommission, uint256 betCommission, uint256 rankCommission);
     event ClaimLpCommission(address indexed referrer, uint256 amount);
     event ClaimBetCommission(address indexed referrer, uint256 amount);
     event ClaimRankCommission(address indexed referrer, uint256 amount);
@@ -86,7 +86,7 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
             info.pendingLpCommission = info.pendingLpCommission.add(_commission);
             accCommission = accCommission.add(_commission);
 
-            emit LpCommissionRecorded(_user, _referrer, _commission);
+            emit LpCommissionRecorded(_user, _referrer, _commission, info.lpCommission, info.betCommission, info.rankCommission);
         }
     }
 
@@ -97,7 +97,7 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
             info.pendingBetCommission = info.pendingBetCommission.add(_commission);
             accCommission = accCommission.add(_commission);
             
-            emit BetCommissionRecorded(_user, _referrer, _commission);
+            emit BetCommissionRecorded(_user, _referrer, _commission, info.lpCommission, info.betCommission, info.rankCommission);
         }
     }
 
@@ -108,7 +108,7 @@ contract Referral is IReferral, Ownable, ReentrancyGuard {
             info.pendingRankCommission = info.pendingRankCommission.add(_commission);
             accCommission = accCommission.add(_commission);
             
-            emit RankCommissionRecorded(_user, _referrer, _commission);
+            emit RankCommissionRecorded(_user, _referrer, _commission, info.lpCommission, info.betCommission, info.rankCommission);
         }
     }
 
