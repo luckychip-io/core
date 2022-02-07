@@ -19,7 +19,7 @@ interface IChef {
     function claimLC(uint256 _pid) external;
 }
 
-contract VestingContract is Ownable, ReentrancyGuard {
+contract Vesting is Ownable, ReentrancyGuard {
     using SafeBEP20 for IBEP20;
     using SafeMath for uint256;
 
