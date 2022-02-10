@@ -262,14 +262,16 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             BonusInfo storage bonus = bonusInfo[i];
             UserRewardInfo storage userReward = userRewardInfo[i][account];
             uint256 pendingReward = user.quantity.mul(bonus.accRewardPerShare).div(1e12).sub(userReward.rewardDebt);
-            totalBonus = totalBonus.add(oracle.getQuantityBUSD(bonus.token, userReward.pendingReward.add(pendingReward)));
+            if(pendingReward > 0 || userReward.pendingReward > 0){
+                totalBonus = totalBonus.add(oracle.getQuantityBUSD(bonus.token, userReward.pendingReward.add(pendingReward)));
+            }
         }
         return totalBonus;
     }
 
     function withdraw() public nonReentrant {
         address account = msg.sender;
-        addPendingRewards(account);
+        updatePower(account);
 
         uint256 tmpReward = 0;
         uint256 totalRewards = 0;
@@ -278,8 +280,10 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             UserRewardInfo storage userReward = userRewardInfo[i][account];
             tmpReward = userReward.pendingReward;
             userReward.pendingReward = 0;
-            IBEP20(bonus.token).safeTransfer(account, tmpReward);
-            totalRewards = totalRewards.add(oracle.getQuantityBUSD(bonus.token, tmpReward));
+            if(tmpReward > 0){
+                IBEP20(bonus.token).safeTransfer(account, tmpReward);
+                totalRewards = totalRewards.add(oracle.getQuantityBUSD(bonus.token, tmpReward));
+            }
         }
 
         UserInfo storage user = userInfo[account];
@@ -289,13 +293,13 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         withdrawReferrerBonus = withdrawReferrerBonus.add(totalRewards.mul(user.referrerQuantity).div(quantity));
         withdrawLotteryBonus = withdrawLotteryBonus.add(totalRewards.mul(user.lotteryQuantity).div(quantity));
 
-        updatePower(account);
         emit Withdraw(msg.sender);
     }
 
     
     function emergencyWithdraw() public nonReentrant {
         address account = msg.sender;
+        updatePower(account);
 
         uint256 tmpReward = 0;
         for(uint256 i = 0; i < bonusInfo.length; i ++){
@@ -303,10 +307,11 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             UserRewardInfo storage userReward = userRewardInfo[i][account];
             tmpReward = userReward.pendingReward;
             userReward.pendingReward = 0;
-            IBEP20(bonus.token).safeTransfer(account, tmpReward);
+            if(tmpReward > 0){
+                IBEP20(bonus.token).safeTransfer(account, tmpReward);
+            }
         }
 
-        updatePower(account);
         emit EmergencyWithdraw(msg.sender);
     }
 
