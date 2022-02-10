@@ -271,7 +271,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         require(epoch == currentEpoch, "Epoch");
         require(block.number >= rounds[currentEpoch].lockBlock && block.number <= rounds[currentEpoch].lockBlock.add(intervalBlocks), "Within interval");
         rounds[currentEpoch].status = Status.Locked;
-        
+
         // Get Random Number
         uint256 requestId = randomGenerator.getRandomNumber();
         roundMap[requestId] = currentEpoch;
@@ -299,7 +299,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // send bankSecret
-    function sendSecret(uint256 requestId, uint256 randomNumber) public whenNotPaused{
+    function sendSecret(uint256 requestId, uint256 randomNumber) public override whenNotPaused{
         require(msg.sender == address(randomGenerator), "Only RandomGenerator");
 
         uint256 epoch = roundMap[requestId];

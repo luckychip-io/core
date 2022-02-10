@@ -298,7 +298,7 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // send bankSecret
-    function sendSecret(uint256 requestId, uint256 randomNumber) public whenNotPaused{
+    function sendSecret(uint256 requestId, uint256 randomNumber) public override whenNotPaused{
         require(msg.sender == address(randomGenerator), "Only RandomGenerator");
 
         uint256 epoch = roundMap[requestId];
