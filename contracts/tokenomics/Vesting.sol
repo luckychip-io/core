@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "../interfaces/IBEP20.sol";
 import "../libraries/SafeBEP20.sol";
+import "../interfaces/ILuckyPower.sol";
 
 interface ILCDice {
     function deposit(uint256 _tokenAmount) external;
@@ -35,6 +36,9 @@ contract Vesting is Ownable, ReentrancyGuard {
     // MasterChef contract
     IChef public masterChef;
 
+    // LuckyPower contract
+    ILuckyPower public luckyPower;
+
     // Start block for the linear vesting
     uint256 public immutable START_BLOCK;
 
@@ -48,7 +52,7 @@ contract Vesting is Ownable, ReentrancyGuard {
     uint256 public depositedAmount;
 
     event OtherTokensWithdrawn(address indexed currency, uint256 amount);
-    event TokensUnlocked(uint256 amount);
+    event TokensWithdrawn(uint256 amount);
 
     /**
      * @notice Constructor
@@ -62,7 +66,8 @@ contract Vesting is Ownable, ReentrancyGuard {
         address _LC,
         address _lcDice,
         address _lcDiceToken,
-        address _masterChef
+        address _masterChef,
+        address _luckyPower
     ) public {
         START_BLOCK = _startBlock;
         LOCK_PERIODS_IN_BLOCKS = _lockPeriodsInBlocks;
@@ -71,20 +76,21 @@ contract Vesting is Ownable, ReentrancyGuard {
         lcDice = ILCDice(_lcDice);
         lcDiceToken = IBEP20(_lcDiceToken);
         masterChef = IChef(_masterChef);
+        luckyPower = ILuckyPower(_luckyPower);
     }
 
     /**
-     * @notice Unlock LC tokens
+     * @notice Withdraw LC tokens
      * @dev It includes protection for overstaking
      */
-    function unlockLC() external nonReentrant onlyOwner {
+    function withdrawLC() external nonReentrant onlyOwner {
         require(block.number >= unlockBlock, "Unlock: Too early");
 
         uint256 balanceToWithdraw = LC.balanceOf(address(this));
         // Transfer LC to owner
         LC.safeTransfer(msg.sender, balanceToWithdraw);
 
-        emit TokensUnlocked(balanceToWithdraw);
+        emit TokensWithdrawn(balanceToWithdraw);
     }
 
     /**
@@ -104,12 +110,12 @@ contract Vesting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Deposit LC to LCDice and stake the LCDiceToken to MasterChef
+     * @notice Bank LC to LCDice and stake the LCDiceToken to MasterChef
      * @param _pid Pool id in MasterChef
      * @param _amount Amount to deposit
      * @param _referrer Referrer
      */
-    function deposit(uint256 _pid, uint256 _amount, address _referrer) external nonReentrant onlyOwner {
+    function bankLC(uint256 _pid, uint256 _amount, address _referrer) external nonReentrant onlyOwner {
         uint256 balanceToDeposit = LC.balanceOf(address(this));
         require(_amount <= balanceToDeposit, 'Not enough LC');
 
@@ -126,7 +132,7 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @param _pid Pool id in MasterChef
      * @param _amount Amount to withdraw
      */
-    function withdraw(uint256 _pid, uint256 _amount) external nonReentrant onlyOwner {
+    function unbankLC(uint256 _pid, uint256 _amount) external nonReentrant onlyOwner {
         require(_amount <= depositedAmount, 'Deposited amount not enough ');
 
         depositedAmount = depositedAmount.sub(_amount);
@@ -140,7 +146,14 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @notice Claim LC from MasterChef
      * @param _pid Pool id in MasterChef
      */
-    function claimLC(uint256 _pid) external nonReentrant onlyOwner {
+    function claimChefLC(uint256 _pid) external nonReentrant onlyOwner {
         masterChef.claimLC(_pid);
+    }
+
+    /**
+     * @notice Claim LC from MasterChef
+     */
+    function claimLuckyBonus() external nonReentrant onlyOwner {
+        luckyPower.withdraw();
     }
 }

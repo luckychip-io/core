@@ -269,7 +269,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return totalBonus;
     }
 
-    function withdraw() public nonReentrant {
+    function withdraw() public override nonReentrant {
         address account = msg.sender;
         updatePower(account);
 
