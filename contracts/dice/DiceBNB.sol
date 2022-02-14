@@ -115,6 +115,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     event SetBetMining(address indexed betMiningAddr);
     event SetRandomGenerator(address indexed randomGeneratorAddr);
     event StartRound(uint256 indexed epoch);
+    event LockRound(uint256 indexed epoch);
     event SendSecretRound(uint256 indexed epoch, uint32 finalNumber);
     event BetNumber(address indexed sender, uint256 indexed currentEpoch, bool[6] numbers, uint256 amount);
     event ClaimReward(address indexed sender, uint256 amount);
@@ -286,6 +287,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         // Get Random Number
         uint256 requestId = randomGenerator.getRandomNumber();
         roundMap[requestId] = currentEpoch;
+
+        emit LockRound(epoch);
     }
 
     // end player time, triggers banker time
