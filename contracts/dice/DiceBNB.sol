@@ -268,13 +268,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // Start the next round n, lock for round n-1
     function executeRound(uint256 epoch) external onlyAdmin whenNotPaused{
         // CurrentEpoch refers to previous round (n-1)
-        require(epoch == currentEpoch, "Epoch");
-        require(block.number >= rounds[currentEpoch].lockBlock && block.number <= rounds[currentEpoch].lockBlock.add(intervalBlocks), "Within interval");
-        rounds[currentEpoch].status = Status.Locked;
-
-        // Get Random Number
-        uint256 requestId = randomGenerator.getRandomNumber();
-        roundMap[requestId] = currentEpoch;
+        lockRound(epoch);
 
         // Increment currentEpoch to current round (n)
         currentEpoch = currentEpoch + 1;
@@ -282,10 +276,21 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         require(rounds[currentEpoch].startBlock < playerEndBlock && rounds[currentEpoch].lockBlock <= playerEndBlock, "playerTime");
     }
 
+    // Lock round.
+    function lockRound(uint256 epoch) public onlyAdmin whenNotPaused {
+        // CurrentEpoch refers to previous round (n-1)
+        require(epoch == currentEpoch, "Epoch");
+        require(block.number >= rounds[currentEpoch].lockBlock && block.number <= rounds[currentEpoch].lockBlock.add(intervalBlocks), "Within interval");
+        rounds[currentEpoch].status = Status.Locked;
+
+        // Get Random Number
+        uint256 requestId = randomGenerator.getRandomNumber();
+        roundMap[requestId] = currentEpoch;
+    }
+
     // end player time, triggers banker time
     function endPlayerTime(uint256 epoch) external onlyAdmin whenNotPaused{
         require(epoch == currentEpoch, "epoch");
-        rounds[currentEpoch].status = Status.Locked;
         _pause();
         _updateNetValue(epoch);
         _claimBonusAndLottery();
