@@ -461,6 +461,8 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
             if(address(luckyPower) != address(0)){
                 token.safeTransfer(address(luckyPower), tmpAmount);
                 luckyPower.updateBonus(address(token), tmpAmount);
+            }else{
+                token.safeTransfer(devAddr, tmpAmount);
             }
         }
         if(totalLotteryAmount > 0){
@@ -701,7 +703,7 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     function getBankerTvlBUSD() public view returns (uint256){
-        if(bankerAmount > 0){
+        if(bankerAmount > 0 && address(oracle) != address(0)){
             return oracle.getQuantityBUSD(address(token), bankerAmount);
         }else{
             return 0;

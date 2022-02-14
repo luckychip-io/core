@@ -462,6 +462,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 IWBNB(WBNB).deposit{value: tmpAmount}();
                 assert(IWBNB(WBNB).transfer(address(luckyPower), tmpAmount));
                 luckyPower.updateBonus(WBNB, tmpAmount);
+            }else{
+                _safeTransferBNB(devAddr, tmpAmount);
             }
         }
         if(totalLotteryAmount > 0){
@@ -697,7 +699,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     function getBankerTvlBUSD() public view returns (uint256){
-        if(bankerAmount > 0){
+        if(bankerAmount > 0 && address(oracle) != address(0)){
             return oracle.getQuantityBUSD(address(WBNB), bankerAmount);
         }else{
             return 0;
