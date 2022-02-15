@@ -105,7 +105,7 @@ contract LCToken is LCBEP20('LuckyChip', 'LC') {
     * @param delegatee The address to delegate votes to
     */
     function delegate(address delegatee) external {
-        return _delegate(msg.sender, delegatee);
+        _delegate(msg.sender, delegatee);
     }
 
     /**
@@ -157,7 +157,7 @@ contract LCToken is LCBEP20('LuckyChip', 'LC') {
         require(signatory != address(0), "LC::delegateBySig: invalid signature");
         require(nonce == nonces[signatory]++, "LC::delegateBySig: invalid nonce");
         require(now <= expiry, "LC::delegateBySig: signature expired");
-        return _delegate(signatory, delegatee);
+        _delegate(signatory, delegatee);
     }
 
     /**
