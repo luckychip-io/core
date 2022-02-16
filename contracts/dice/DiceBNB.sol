@@ -36,7 +36,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public playerTimeBlocks;
     uint256 public bankerTimeBlocks;
     uint256 public constant TOTAL_RATE = 10000; // 100%
-    uint256 public gapRate = 220; // 2.2%
+    uint256 public gapRate = 200; // 2% for non-lc table
     uint256 public devRate = 500; // 5% in gap
     uint256 public burnRate = 500; // 5% in gap
     uint256 public bonusRate = 2000; // 20% in gap
@@ -48,6 +48,13 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public maxBankerAmount;
     uint256 public maxWithdrawFeeRatio = 20; // 0.2% for withdrawFee
     uint256 public fullyWithdrawTh = 1000; //the threshold to judge whether a user can withdraw fully, default 10%
+
+    // for private dice
+    uint256 public privateFeeAmount; // Fee amount for private dice
+    uint256 public privateGapRate = 300;// Private gap rate, default 3%
+    uint256 public minPrivateBetAmount; // Minimum private bet amount
+    uint256 public maxPrivateBetRatio = 100; // Maximum private bet amount
+    int256 public houseProfit; // profit of private dice
 
     address public adminAddr;
     address public devAddr;
@@ -80,7 +87,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 bonusAmount;
         uint256 lotteryAmount;
         uint256 betUsers;
-        uint32 finalNumber;
+        uint8 finalNumber;
         Status status;
     }
 
@@ -95,6 +102,32 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 diceTokenAmount;
         uint256 avgBuyValue;
     }
+
+    // Info of each private bet.
+    struct Bet {
+        // Block number
+        uint256 blockNumber;
+        // Address of a gambler, used to pay out winning bets.
+        address gambler;
+        // Wager amount in wei.
+        uint256 amount;
+        // Win amount.
+        uint256 winAmount;
+        // Final number
+        uint8 finalNumber;
+        // selected number
+        bool[6] numbers;
+        // Status of bet settlement
+        bool isSettled;
+    }
+
+    // for private dice
+    Bet[] public bets;
+    // Mapping requestId returned by Chainlink VRF to bet Id.
+    mapping(uint256 => uint) public betMap;
+    mapping(address => uint256[]) public userBets;
+
+    // for public dice
 
     mapping(uint256 => Round) public rounds;
     // Mapping requestId returned by Chainlink VRF to round Id.
@@ -116,7 +149,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     event SetRandomGenerator(address indexed randomGeneratorAddr);
     event StartRound(uint256 indexed epoch);
     event LockRound(uint256 indexed epoch);
-    event SendSecretRound(uint256 indexed epoch, uint32 finalNumber);
+    event SendSecretRound(uint256 indexed epoch, uint8 finalNumber);
     event BetNumber(address indexed sender, uint256 indexed currentEpoch, bool[6] numbers, uint256 amount);
     event ClaimReward(address indexed sender, uint256 amount);
     event RewardsCalculated(uint256 indexed epoch, uint256 burnAmount, uint256 bonusAmount,uint256 lotteryAmount);
@@ -125,6 +158,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     event UpdateNetValue(uint256 epoch, uint256 netValue);
     event Deposit(address indexed user, uint256 tokenAmount);
     event Withdraw(address indexed user, uint256 diceTokenAmount);
+
+    event PrivateBetPlaced(uint256 indexed betId, address gambler, address referrer, uint256 amount, bool[6] numbers);
+    event PrivateBetSettled(uint256 indexed betId, address indexed gambler, uint256 amount, uint256 winAmount, bool[6] numbers, uint8 finalNumber);
+    event PrivateBetRefunded(uint256 indexed betId, address indexed gambler, uint256 amount);
 
     constructor(
         address _WBNBAddr,
@@ -139,7 +176,9 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 _bankerTimeBlocks,
         uint256 _minBetAmount,
         uint256 _feeAmount,
-        uint256 _maxBankerAmount
+        uint256 _maxBankerAmount,
+        uint256 _minPrivateBetAmount,
+        uint256 _privateFeeAmount
     ) public {
         WBNB = _WBNBAddr;
         lcToken = LCToken(_lcTokenAddr);
@@ -154,9 +193,14 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         minBetAmount = _minBetAmount;
         feeAmount = _feeAmount;
         maxBankerAmount = _maxBankerAmount;
+        minPrivateBetAmount = _minPrivateBetAmount;
+        privateFeeAmount = _privateFeeAmount;
         netValue = uint256(1e12);
         _pause();
     }
+
+    fallback() external payable {}
+    receive() external payable {}
 
     modifier notContract() {
         require((!_isContract(msg.sender)) && (msg.sender == tx.origin), "no contract");
@@ -215,14 +259,12 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // Update the swap router.
     function setSwapRouter(address _router) external onlyAdmin {
-        require(_router != address(0), "Zero");
         swapRouter = ILuckyChipRouter02(_router);
         emit SetSwapRouter(_router);
     }
 
     // Update the oracle.
     function setOracle(address _oracleAddr) external onlyAdmin {
-        require(_oracleAddr != address(0), "Zero");
         oracle = IOracle(_oracleAddr);
         emit SetOracle(_oracleAddr);
     }
@@ -235,7 +277,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // Update the bet mining.
     function setBetMining(address _betMiningAddr) external onlyAdmin {
-        require(_betMiningAddr != address(0), "Zero");
         betMining = IBetMining(_betMiningAddr);
         emit SetBetMining(_betMiningAddr);
     }
@@ -295,15 +336,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function endPlayerTime(uint256 epoch) external onlyAdmin whenNotPaused{
         require(epoch == currentEpoch, "epoch");
         _pause();
-        _updateNetValue(epoch);
-        _claimBonusAndLottery();
-        emit EndPlayerTime(currentEpoch);
-    }
-
-    // update net value
-    function _updateNetValue(uint256 epoch) internal whenPaused{    
         netValue = netValue.mul(bankerAmount).div(prevBankerAmount);
         emit UpdateNetValue(epoch, netValue);
+        _claimBonusAndLottery();
+        emit EndPlayerTime(currentEpoch);
     }
 
     // send bankSecret
@@ -321,7 +357,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function _safeSendSecret(uint256 epoch, uint256 randomNumber) internal whenNotPaused {
         Round storage round = rounds[epoch];
         round.secretSentBlock = block.number;
-        round.finalNumber = uint32(randomNumber % 6);
+        round.finalNumber = uint8(randomNumber % 6);
         round.status = Status.Claimable;
 
         emit SendSecretRound(epoch, round.finalNumber);
@@ -453,15 +489,20 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // Claim all bonus to LuckyPower
     function _claimBonusAndLottery() internal {
         uint256 tmpAmount = 0;
-        if(totalDevAmount > 0){
-            tmpAmount = totalDevAmount;
-            totalDevAmount = 0;
-            _safeTransferBNB(devAddr, tmpAmount);
-        }
         if(totalBurnAmount > 0){
             tmpAmount = totalBurnAmount;
             totalBurnAmount = 0;
-            lcToken.burn(address(this), tmpAmount);
+
+            if(address(swapRouter) != address(0)){
+                address[] memory path = new address[](2);
+                path[0] = WBNB;
+                path[1] = address(lcToken);
+                uint256 amountOut = swapRouter.getAmountsOut(tmpAmount, path)[1];
+                uint256 lcAmount = swapRouter.swapExactETHForTokens{value: tmpAmount}(amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
+                lcToken.burn(address(this), lcAmount);
+            }else{
+                totalDevAmount = totalDevAmount.add(tmpAmount);
+            }
         }
         if(totalBonusAmount > 0){
             tmpAmount = totalBonusAmount;
@@ -471,8 +512,13 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 assert(IWBNB(WBNB).transfer(address(luckyPower), tmpAmount));
                 luckyPower.updateBonus(WBNB, tmpAmount);
             }else{
-                _safeTransferBNB(devAddr, tmpAmount);
+                totalDevAmount = totalDevAmount.add(tmpAmount);
             }
+        }
+        if(totalDevAmount > 0){
+            tmpAmount = totalDevAmount;
+            totalDevAmount = 0;
+            _safeTransferBNB(devAddr, tmpAmount);
         }
         if(totalLotteryAmount > 0){
             tmpAmount = totalLotteryAmount;
@@ -483,10 +529,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     function getUserRoundCount(address user) external view returns (uint256){
         return userRounds[user].length;
-    }
-
-    function getUserAllRounds(address user) external view returns (uint256, uint256[] memory){
-        return (userRounds[user].length, userRounds[user]);
     }
 
     // Return round epochs that a user has participated
@@ -519,6 +561,31 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // Return betAmounts of a round
     function getRoundBetAmounts(uint256 epoch) external view returns (uint256[6] memory){
         return rounds[epoch].betAmounts;
+    }
+
+    function getUserBetCount(address user) external view returns (uint256){
+        return userBets[user].length;
+    }
+
+    // Return round epochs that a user has participated
+    function getUserBets(
+        address user,
+        uint256 fromIndex,
+        uint256 toIndex
+    ) external view returns (uint256, uint256[] memory) {
+        uint256 realToIndex = toIndex;
+        if(realToIndex > userRounds[user].length){
+            realToIndex = userRounds[user].length;
+        }
+
+        if(fromIndex < realToIndex){
+            uint256 length = realToIndex - fromIndex;
+            uint256[] memory values = new uint256[](length);
+            for (uint256 i = 0; i < length; i++) {
+                values[i] = userBets[user][fromIndex.add(i)];
+            }
+            return (length, values);
+        }
     }
 
     // Manual Start round. Previous round n-1 must lock
@@ -569,18 +636,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                     tmpBankerAmount = tmpBankerAmount.sub(tmpAmount);
                 }
                 
-                round.burnAmount = burnAmount;
                 bankerAmount = tmpBankerAmount;
-        
+                round.burnAmount = burnAmount;
+                totalBurnAmount = totalBurnAmount.add(burnAmount);
                 totalDevAmount = totalDevAmount.add(devAmount);
-                if(round.burnAmount > 0 && address(swapRouter) != address(0)){
-                    address[] memory path = new address[](2);
-                    path[0] = WBNB;
-                    path[1] = address(lcToken);
-                    uint256 amountOut = swapRouter.getAmountsOut(round.burnAmount, path)[1];
-                    uint256 lcAmount = swapRouter.swapExactETHForTokens{value: round.burnAmount}(amountOut.mul(2).div(10), path, address(this), block.timestamp + (5 minutes))[1];
-                    totalBurnAmount = totalBurnAmount.add(lcAmount);
-                }
             }
 
             { // avoid stack too deep
@@ -614,6 +673,144 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
             emit RewardsCalculated(epoch, round.burnAmount, round.bonusAmount, round.lotteryAmount);
         }
+    }
+
+    // Place bet
+    function placePrivateBet(bool[6] calldata numbers, address _referrer) external payable nonReentrant notContract {
+        // Validate input data.
+        address gambler = msg.sender;
+        require(msg.value >= privateFeeAmount, "PrivateFeeAmount");
+        uint256 numberCount = 0;
+        for (uint32 i = 0; i < 6; i ++) {
+            if (numbers[i]) {
+                numberCount = numberCount + 1;    
+            }
+        }
+        require(numberCount > 0, "numberCount > 0");
+        uint256 amount = msg.value.sub(privateFeeAmount);
+        require(amount >= minPrivateBetAmount.mul(numberCount) && amount <= bankerAmount.mul(maxPrivateBetRatio).div(TOTAL_RATE).mul(numberCount), "Range limit");
+
+        // Check whether contract has enough funds to accept this bet.
+        require(amount.mul(6).div(numberCount) <= bankerAmount, "Insufficient funds");
+        if(privateFeeAmount > 0){
+            _safeTransferBNB(adminAddr, privateFeeAmount);
+        }
+
+        uint256 requestId = randomGenerator.getRandomNumber();
+        betMap[requestId] = bets.length;
+
+        userBets[msg.sender].push(bets.length);
+
+        // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
+        emit PrivateBetPlaced(bets.length, gambler, _referrer, amount, numbers);
+
+        // Store bet in bet list.
+        bets.push(Bet(
+            {
+                blockNumber: block.number,
+                gambler: gambler,
+                amount: amount,
+                winAmount: 0,
+                finalNumber: 0,
+                numbers: numbers,
+                isSettled: false
+            }
+        ));
+
+        if(address(betMining) != address(0)){
+            betMining.bet(msg.sender, _referrer, WBNB, amount);
+        }
+    }
+
+    // Settle bet. Function can only be called by fulfillRandomness function, which in turn can only be called by Chainlink VRF.
+    function settlePrivateBet(uint256 requestId, uint256 randomNumber) external nonReentrant {
+        require(msg.sender == address(randomGenerator), "Only RandomGenerator");
+        
+        uint256 betId = betMap[requestId];
+        Bet storage bet = bets[betId];
+        uint256 amount = bet.amount;
+
+        if(amount > 0 && bet.isSettled == false){ // Validation checks.
+            uint256 winAmount = 0;
+            uint8 finalNumber = uint8(randomNumber % 6);
+            uint256 numberCount = 0;
+            for (uint32 i = 0; i < 6; i ++) {
+                if (bet.numbers[i]) {
+                    numberCount = numberCount + 1;    
+                }
+            }
+
+            uint256 gapAmount = 0;
+            uint256 tmpBankerAmount = bankerAmount;
+            if(bet.numbers[finalNumber]){
+                if(numberCount == 1){
+                    tmpBankerAmount = tmpBankerAmount.sub(amount.mul(6).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE));
+                    gapAmount = amount.mul(6).mul(privateGapRate).div(TOTAL_RATE);
+                }else{
+                    tmpBankerAmount = tmpBankerAmount.add(amount.mul(numberCount.sub(1)).div(numberCount));
+                    gapAmount = amount.mul(numberCount.sub(1)).div(numberCount).mul(privateGapRate).div(TOTAL_RATE);
+
+                    tmpBankerAmount = tmpBankerAmount.sub(amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE));
+                    gapAmount = amount.mul(6).div(numberCount).mul(privateGapRate).div(TOTAL_RATE);
+                }
+
+                winAmount = amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE);
+                houseProfit -= int256(winAmount) - int256(amount);
+                _safeTransferBNB(bet.gambler, winAmount);
+            }else{
+                tmpBankerAmount = tmpBankerAmount.add(amount);
+                gapAmount = amount.mul(privateGapRate).div(TOTAL_RATE);
+
+                houseProfit += int256(amount);
+            }
+
+            uint256 devAmount = gapAmount.mul(devRate).div(TOTAL_RATE);
+            totalDevAmount = totalDevAmount.add(devAmount);
+            tmpBankerAmount = tmpBankerAmount.sub(devAmount);
+
+            uint256 burnAmount = gapAmount.mul(burnRate).div(TOTAL_RATE);
+            totalBurnAmount = totalBurnAmount.add(burnAmount);
+            tmpBankerAmount = tmpBankerAmount.sub(burnAmount);
+
+            uint256 bonusAmount = gapAmount.mul(bonusRate).div(TOTAL_RATE);
+            totalBonusAmount = totalBonusAmount.add(bonusAmount);
+            tmpBankerAmount = tmpBankerAmount.sub(bonusAmount);
+
+            uint256 lotteryAmount = gapAmount.mul(lotteryRate).div(TOTAL_RATE);
+            totalLotteryAmount = lotteryAmount.add(lotteryAmount);
+            tmpBankerAmount = tmpBankerAmount.sub(lotteryAmount);
+
+            bankerAmount = tmpBankerAmount;
+            bet.winAmount = winAmount;
+            bet.finalNumber = finalNumber;
+            bet.isSettled = true;
+            
+            // Record bet settlement in event log.
+            emit PrivateBetSettled(betId, bet.gambler, amount, winAmount, bet.numbers, finalNumber);
+        }
+    }
+
+    // Return the bet in the very unlikely scenario it was not settled by Chainlink VRF. 
+    // In case you find yourself in a situation like this, just contact Polyroll support.
+    // However, nothing precludes you from calling this method yourself.
+    function refundBet(uint256 betId) external nonReentrant {
+        
+        Bet storage bet = bets[betId];
+        uint256 amount = bet.amount;
+
+        // Validation checks
+        require(amount > 0 && bet.isSettled == false, "No refundable");
+        require(block.number > bet.blockNumber + playerTimeBlocks, "Wait before requesting refund");
+
+        // Update bet records
+        bet.isSettled = true;
+        bet.winAmount = amount;
+
+        // Send the refund.
+        _safeTransferBNB(bet.gambler, amount);
+
+        // Record refund in event logs
+        emit PrivateBetRefunded(betId, bet.gambler, amount);
     }
 
     // Deposit token to Dice as a banker, get Syrup back.
@@ -692,11 +889,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         return _amount.mul(netValue).div(1e12);    
     }
 
-    // View function to see banker diceToken Value on frontend.
-    function calProfitRate(address bankerAddr) external view returns (uint256){
-        return netValue.mul(100).div(bankerInfo[bankerAddr].avgBuyValue);    
-    }
-
     function _safeTransferBNB(address to, uint256 value) internal {
         (bool success, ) = to.call{gas: 23000, value: value}("");
         require(success, 'BNB_TRANSFER_FAILED');
@@ -706,12 +898,5 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         return WBNB;
     }
 
-    function getBankerTvlBUSD() public view returns (uint256){
-        if(bankerAmount > 0 && address(oracle) != address(0)){
-            return oracle.getQuantityBUSD(address(WBNB), bankerAmount);
-        }else{
-            return 0;
-        }
-    }
 }
 
