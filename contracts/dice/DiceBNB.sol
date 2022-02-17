@@ -54,7 +54,6 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public privateGapRate = 300;// Private gap rate, default 3%
     uint256 public minPrivateBetAmount; // Minimum private bet amount
     uint256 public maxPrivateBetRatio = 100; // Maximum private bet amount
-    int256 public houseProfit; // profit of private dice
 
     address public adminAddr;
     address public devAddr;
@@ -123,25 +122,21 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // for private dice
     Bet[] public bets;
-    // Mapping requestId returned by Chainlink VRF to bet Id.
-    mapping(uint256 => uint) public betMap;
+    mapping(uint256 => uint) public betMap; // Mapping requestId returned by Chainlink VRF to bet Id.
     mapping(address => uint256[]) public userBets;
 
     // for public dice
-
-    mapping(uint256 => Round) public rounds;
-    // Mapping requestId returned by Chainlink VRF to round Id.
-    mapping(uint256 => uint256) public roundMap;
+    mapping(uint256 => Round) public rounds;    
+    mapping(uint256 => uint256) public roundMap; // Mapping requestId returned by Chainlink VRF to round Id.
     mapping(uint256 => mapping(address => BetInfo)) public ledger;
     mapping(address => uint256[]) public userRounds;
     mapping(address => BankerInfo) public bankerInfo;
 
     event SetAdmin(address adminAddr, address devAddr, address lotteryAddr);
     event SetBlocks(uint256 playerTimeBlocks, uint256 bankerTimeBlocks);
-    event SetRates(uint256 gapRate, uint256 devRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate);
-    event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount);
-    event SetRatios(uint256 maxBetRatio, uint256 maxLostRatio, uint256 withdrawFeeRatio);
-    event SetMultiplier(uint256 multiplier);
+    event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 devRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate);
+    event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount, uint256 minPrivateFeeAmount, uint256 minPrivateBetAmount);
+    event SetRatios(uint256 maxBetRatio, uint256 maxLostRatio, uint256 withdrawFeeRatio, uint256 maxPrivateBetRatio);
     event SetSwapRouter(address indexed swapRouterAddr);
     event SetOracle(address indexed oracleAddr);
     event SetLuckyPower(address indexed luckyPowerAddr);
@@ -221,31 +216,35 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set rates
-    function setRates(uint256 _gapRate, uint256 _devRate, uint256 _burnRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyAdmin {
-        require(_gapRate <= 1000 && _devRate.add(_burnRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE, "rate limit");
+    function setRates(uint256 _gapRate, uint256 _privateGapRate, uint256 _devRate, uint256 _burnRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyAdmin {
+        require(_gapRate <= 1000 && _privateGapRate <= 1000 && _devRate.add(_burnRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE, "rate limit");
         gapRate = _gapRate;
+        privateGapRate = _privateGapRate;
         devRate = _devRate;
         burnRate = _burnRate;
         bonusRate = _bonusRate;
         lotteryRate = _lotteryRate;
-        emit SetRates(gapRate, devRate, burnRate, bonusRate, lotteryRate);
+        emit SetRates(gapRate, privateGapRate, devRate, burnRate, bonusRate, lotteryRate);
     }
 
     // set amounts
-    function setAmounts(uint256 _minBetAmount, uint256 _feeAmount, uint256 _maxBankerAmount) external onlyAdmin {
+    function setAmounts(uint256 _minBetAmount, uint256 _feeAmount, uint256 _maxBankerAmount, uint256 _privateFeeAmount, uint256 _minPrivateBetAmount) external onlyAdmin {
         minBetAmount = _minBetAmount;
         feeAmount = _feeAmount;
         maxBankerAmount = _maxBankerAmount;
-        emit SetAmounts(minBetAmount, feeAmount, maxBankerAmount);
+        privateFeeAmount = _privateFeeAmount;
+        minPrivateBetAmount = _minPrivateBetAmount;
+        emit SetAmounts(minBetAmount, feeAmount, maxBankerAmount, privateFeeAmount, minPrivateBetAmount);
     }
 
     // set ratios
-    function setRatios(uint256 _maxBetRatio, uint256 _maxLostRatio, uint256 _maxWithdrawFeeRatio) external onlyAdmin {
-        require(_maxBetRatio <= 50 && _maxLostRatio <= 500 && _maxWithdrawFeeRatio <= 100, "ratio limit");
+    function setRatios(uint256 _maxBetRatio, uint256 _maxLostRatio, uint256 _maxWithdrawFeeRatio, uint256 _maxPrivateBetRatio) external onlyAdmin {
+        require(_maxBetRatio <= 50 && _maxLostRatio <= 500 && _maxWithdrawFeeRatio <= 100 && maxPrivateBetRatio <= 500, "ratio limit");
         maxBetRatio = _maxBetRatio;
         maxLostRatio = _maxLostRatio;
         maxWithdrawFeeRatio = _maxWithdrawFeeRatio;
-        emit SetRatios(maxBetRatio, maxLostRatio, maxWithdrawFeeRatio);
+        maxPrivateBetRatio = _maxPrivateBetRatio;
+        emit SetRatios(maxBetRatio, maxLostRatio, maxWithdrawFeeRatio, maxPrivateBetRatio);
     }
 
     // set admin address
@@ -755,13 +754,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 }
 
                 winAmount = amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE);
-                houseProfit -= int256(winAmount) - int256(amount);
                 _safeTransferBNB(bet.gambler, winAmount);
             }else{
                 tmpBankerAmount = tmpBankerAmount.add(amount);
                 gapAmount = amount.mul(privateGapRate).div(TOTAL_RATE);
-
-                houseProfit += int256(amount);
             }
 
             uint256 devAmount = gapAmount.mul(devRate).div(TOTAL_RATE);
