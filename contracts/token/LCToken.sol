@@ -339,7 +339,7 @@ contract LCToken is Context, IBEP20, Ownable {
         return EnumerableSet.contains(_minters, account);
     }
 
-    function getMinter(uint256 _index) public view onlyOwner returns (address) {
+    function getMinter(uint256 _index) public view returns (address) {
         require(_index <= getMinterLength() - 1, "Token: index out of bounds");
         return EnumerableSet.at(_minters, _index);
     }
