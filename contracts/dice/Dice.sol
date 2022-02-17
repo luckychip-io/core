@@ -618,6 +618,10 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
         }
     }
 
+    function settlePrivateBet(uint256 requestId, uint256 randomNumber) external override nonReentrant {
+        require(msg.sender == address(randomGenerator), "Only RandomGenerator");
+    }
+
     // Deposit token to Dice as a banker, get Syrup back.
     function deposit(uint256 _tokenAmount) public whenPaused nonReentrant notContract {
         require(_tokenAmount > 0, "Amount > 0");

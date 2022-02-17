@@ -13,6 +13,7 @@ contract MockRandomGenerator is IRandomGenerator, Ownable {
 
     IDice public dice;
     uint256 public lastRequestId;
+    uint256 public lastPrivateRequestId;
 
     /**
      * @notice Request randomness
@@ -20,6 +21,14 @@ contract MockRandomGenerator is IRandomGenerator, Ownable {
     function getRandomNumber() external override returns (uint256) {
         lastRequestId = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
         return lastRequestId;
+    }
+
+    /**
+     * @notice Request private randomness
+     */
+    function getPrivateRandomNumber() external override returns (uint256) {
+        lastPrivateRequestId = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
+        return lastPrivateRequestId;
     }
 
     /**
@@ -45,5 +54,12 @@ contract MockRandomGenerator is IRandomGenerator, Ownable {
      */
     function fulfillRandomness(uint256 requestId, uint256 randomness) external onlyOwner {
         dice.sendSecret(requestId, randomness);
+    }
+
+    /**
+     * @notice Callback function used by ChainLink's VRF Coordinator
+     */
+    function fulfillPrivateRandomness(uint256 requestId, uint256 randomness) external onlyOwner {
+        dice.settlePrivateBet(requestId, randomness);
     }
 }

@@ -722,7 +722,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Settle bet. Function can only be called by fulfillRandomness function, which in turn can only be called by Chainlink VRF.
-    function settlePrivateBet(uint256 requestId, uint256 randomNumber) external nonReentrant {
+    function settlePrivateBet(uint256 requestId, uint256 randomNumber) external override nonReentrant {
         require(msg.sender == address(randomGenerator), "Only RandomGenerator");
         
         uint256 betId = betMap[requestId];
@@ -796,7 +796,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
         // Validation checks
         require(amount > 0 && bet.isSettled == false, "No refundable");
-        require(block.number > bet.blockNumber + playerTimeBlocks, "Wait before requesting refund");
+        require(block.number > bet.blockNumber + playerTimeBlocks, "No expired");
 
         // Update bet records
         bet.isSettled = true;
