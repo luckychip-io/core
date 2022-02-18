@@ -365,17 +365,16 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // bet number
     function betNumber(bool[6] calldata numbers, address referrer) external payable whenNotPaused notContract nonReentrant {
         Round storage round = rounds[currentEpoch];
-        require(msg.value >= feeAmount, "FeeAmount");
-        require(round.status == Status.Open, "Not Open");
-        require(block.number > round.startBlock && block.number < round.lockBlock, "Not bettable");
-        require(ledger[currentEpoch][msg.sender].amount == 0, "Bet once");
         uint16 numberCount = 0;
         for (uint32 i = 0; i < 6; i ++) {
             if (numbers[i]) {
                 numberCount = numberCount + 1;    
             }
         }
-        require(numberCount > 0, "numberCount > 0");
+        require(msg.value >= feeAmount && numberCount > 0, "Wrong para");
+        require(round.status == Status.Open && block.number > round.startBlock && block.number < round.lockBlock, "Not bettable");
+        require(ledger[currentEpoch][msg.sender].amount == 0, "Bet once");
+
         uint256 amount = msg.value.sub(feeAmount);
         require(amount >= minBetAmount.mul(uint256(numberCount)) && amount <= round.maxBetAmount.mul(uint256(numberCount)), "range limit");
         uint256 maxBetAmount = 0;
@@ -586,6 +585,11 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             return (length, values);
         }
     }
+    
+    // Return user private bet info
+    function getPrivateBetNumbers(uint256 betId) external view returns (bool[6] memory){
+        return bets[betId].numbers;
+    }
 
     // Manual Start round. Previous round n-1 must lock
     function manualStartRound() external onlyAdmin whenNotPaused {
@@ -678,14 +682,13 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function placePrivateBet(bool[6] calldata numbers, address _referrer) external payable whenNotPaused nonReentrant notContract {
         // Validate input data.
         address gambler = msg.sender;
-        require(msg.value >= privateFeeAmount, "PrivateFeeAmount");
         uint256 numberCount = 0;
         for (uint32 i = 0; i < 6; i ++) {
             if (numbers[i]) {
                 numberCount = numberCount + 1;    
             }
         }
-        require(numberCount > 0, "numberCount > 0");
+        require(msg.value >= privateFeeAmount && numberCount > 0, "Wrong para");
         uint256 amount = msg.value.sub(privateFeeAmount);
         require(amount >= minPrivateBetAmount.mul(numberCount) && amount <= bankerAmount.mul(maxPrivateBetRatio).div(TOTAL_RATE).mul(numberCount), "Range limit");
 
