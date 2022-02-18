@@ -675,7 +675,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Place bet
-    function placePrivateBet(bool[6] calldata numbers, address _referrer) external payable nonReentrant notContract {
+    function placePrivateBet(bool[6] calldata numbers, address _referrer) external payable whenNotPaused nonReentrant notContract {
         // Validate input data.
         address gambler = msg.sender;
         require(msg.value >= privateFeeAmount, "PrivateFeeAmount");
@@ -795,8 +795,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 amount = bet.amount;
 
         // Validation checks
-        require(amount > 0 && bet.isSettled == false, "No refundable");
-        require(block.number > bet.blockNumber + playerTimeBlocks, "No expired");
+        require(amount > 0 && bet.isSettled == false && block.number > bet.blockNumber + playerTimeBlocks, "No refundable");
 
         // Update bet records
         bet.isSettled = true;
@@ -841,9 +840,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // Withdraw syrup from dice to get token back
     function withdraw(uint256 _diceTokenAmount) public whenPaused nonReentrant notContract {
-        require(_diceTokenAmount > 0, "diceTokenAmount > 0");
         BankerInfo storage banker = bankerInfo[msg.sender];
-        require(_diceTokenAmount <= banker.diceTokenAmount, "diceTokenAmount <= banker.diceTokenAmount");
+        require(_diceTokenAmount > 0 && _diceTokenAmount <= banker.diceTokenAmount, "0 < diceTokenAmount <= banker.diceTokenAmount");
         uint256 ratio = getWithdrawFeeRatio(msg.sender);
         banker.diceTokenAmount = banker.diceTokenAmount.sub(_diceTokenAmount); 
         SafeBEP20.safeTransferFrom(diceToken, msg.sender, address(diceToken), _diceTokenAmount);
