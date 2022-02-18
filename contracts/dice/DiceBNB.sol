@@ -620,7 +620,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                 uint256 tmpBankerAmount = bankerAmount;
                 for (uint32 i = 0; i < 6; i ++){
                     if (i == round.finalNumber){
-                        tmpBankerAmount = tmpBankerAmount.sub(round.betAmounts[i].mul(6).mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE));
+                        tmpBankerAmount = tmpBankerAmount.add(round.betAmounts[i]).sub(round.betAmounts[i].mul(6).mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE));
                         gapAmount = round.betAmounts[i].mul(6).mul(gapRate).div(TOTAL_RATE);
                     }else{
                         tmpBankerAmount = tmpBankerAmount.add(round.betAmounts[i]);
@@ -695,7 +695,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             _safeTransferBNB(adminAddr, privateFeeAmount);
         }
 
-        uint256 requestId = randomGenerator.getRandomNumber();
+        uint256 requestId = randomGenerator.getPrivateRandomNumber();
         betMap[requestId] = bets.length;
 
         userBets[msg.sender].push(bets.length);
@@ -746,11 +746,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                     tmpBankerAmount = tmpBankerAmount.sub(amount.mul(6).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE));
                     gapAmount = amount.mul(6).mul(privateGapRate).div(TOTAL_RATE);
                 }else{
-                    tmpBankerAmount = tmpBankerAmount.add(amount.mul(numberCount.sub(1)).div(numberCount));
+                    tmpBankerAmount = tmpBankerAmount.add(amount).sub(amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE));
                     gapAmount = amount.mul(numberCount.sub(1)).div(numberCount).mul(privateGapRate).div(TOTAL_RATE);
-
-                    tmpBankerAmount = tmpBankerAmount.sub(amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE));
-                    gapAmount = amount.mul(6).div(numberCount).mul(privateGapRate).div(TOTAL_RATE);
+                    
+                    gapAmount = gapAmount.add(amount.mul(6).div(numberCount).mul(privateGapRate).div(TOTAL_RATE));
                 }
 
                 winAmount = amount.mul(6).div(numberCount).mul(TOTAL_RATE.sub(privateGapRate)).div(TOTAL_RATE);
@@ -773,7 +772,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             tmpBankerAmount = tmpBankerAmount.sub(bonusAmount);
 
             uint256 lotteryAmount = gapAmount.mul(lotteryRate).div(TOTAL_RATE);
-            totalLotteryAmount = lotteryAmount.add(lotteryAmount);
+            totalLotteryAmount = totalLotteryAmount.add(lotteryAmount);
             tmpBankerAmount = tmpBankerAmount.sub(lotteryAmount);
 
             bankerAmount = tmpBankerAmount;
