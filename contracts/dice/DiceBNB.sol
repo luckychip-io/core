@@ -572,8 +572,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 toIndex
     ) external view returns (uint256, uint256[] memory) {
         uint256 realToIndex = toIndex;
-        if(realToIndex > userRounds[user].length){
-            realToIndex = userRounds[user].length;
+        if(realToIndex > userBets[user].length){
+            realToIndex = userBets[user].length;
         }
 
         if(fromIndex < realToIndex){
