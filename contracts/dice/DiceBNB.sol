@@ -14,6 +14,7 @@ import "../interfaces/ILuckyChipRouter02.sol";
 import "../interfaces/IBetMining.sol";
 import "../interfaces/ILuckyPower.sol";
 import "../interfaces/IRandomGenerator.sol";
+import "../interfaces/IDiceReferral.sol";
 import "../libraries/SafeBEP20.sol";
 import "../token/DiceToken.sol";
 import "../token/LCToken.sol";
@@ -52,6 +53,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     // for private dice
     uint256 public privateFeeAmount; // Fee amount for private dice
     uint256 public privateGapRate = 300;// Private gap rate, default 3%
+    uint256 public privateReferralRate = 500; // 5% in gap
     uint256 public minPrivateBetAmount; // Minimum private bet amount
     uint256 public maxPrivateBetRatio = 100; // Maximum private bet amount
 
@@ -66,6 +68,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     ILuckyChipRouter02 public swapRouter;
     IBetMining public betMining;
     IRandomGenerator public randomGenerator;
+    IDiceReferral public diceReferral;
 
     enum Status {
         Pending,
@@ -134,14 +137,10 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     event SetAdmin(address adminAddr, address devAddr, address lotteryAddr);
     event SetBlocks(uint256 playerTimeBlocks, uint256 bankerTimeBlocks);
-    event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 devRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate);
+    event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 devRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate, uint256 privateReferralRate);
     event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount, uint256 minPrivateFeeAmount, uint256 minPrivateBetAmount);
     event SetRatios(uint256 maxBetRatio, uint256 maxLostRatio, uint256 withdrawFeeRatio, uint256 maxPrivateBetRatio);
-    event SetSwapRouter(address indexed swapRouterAddr);
-    event SetOracle(address indexed oracleAddr);
-    event SetLuckyPower(address indexed luckyPowerAddr);
-    event SetBetMining(address indexed betMiningAddr);
-    event SetRandomGenerator(address indexed randomGeneratorAddr);
+    event SetContract(address swapRouterAddr, address oracleAddr, address luckyPowerAddr, address betMiningAddr, address randomGeneratorAddr, address diceReferralAddr);
     event StartRound(uint256 indexed epoch);
     event LockRound(uint256 indexed epoch);
     event SendSecretRound(uint256 indexed epoch, uint8 finalNumber);
@@ -216,15 +215,16 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set rates
-    function setRates(uint256 _gapRate, uint256 _privateGapRate, uint256 _devRate, uint256 _burnRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyAdmin {
-        require(_gapRate <= 1000 && _privateGapRate <= 1000 && _devRate.add(_burnRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE, "rate limit");
+    function setRates(uint256 _gapRate, uint256 _privateGapRate, uint256 _devRate, uint256 _burnRate, uint256 _bonusRate, uint256 _lotteryRate, uint256 _privateReferralRate) external onlyAdmin {
+        require(_gapRate <= 1000 && _privateGapRate <= 1000 && _devRate.add(_burnRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE && _privateReferralRate <= 2000, "rate limit");
         gapRate = _gapRate;
         privateGapRate = _privateGapRate;
         devRate = _devRate;
         burnRate = _burnRate;
         bonusRate = _bonusRate;
         lotteryRate = _lotteryRate;
-        emit SetRates(gapRate, privateGapRate, devRate, burnRate, bonusRate, lotteryRate);
+        privateReferralRate = _privateReferralRate;
+        emit SetRates(gapRate, privateGapRate, devRate, burnRate, bonusRate, lotteryRate, privateReferralRate);
     }
 
     // set amounts
@@ -257,34 +257,15 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Update the swap router.
-    function setSwapRouter(address _router) external onlyAdmin {
-        swapRouter = ILuckyChipRouter02(_router);
-        emit SetSwapRouter(_router);
-    }
-
-    // Update the oracle.
-    function setOracle(address _oracleAddr) external onlyAdmin {
-        oracle = IOracle(_oracleAddr);
-        emit SetOracle(_oracleAddr);
-    }
-
-    // Update the lucky power.
-    function setLuckyPower(address _luckyPowerAddr) external onlyAdmin {
-        luckyPower = ILuckyPower(_luckyPowerAddr);
-        emit SetLuckyPower(_luckyPowerAddr);
-    }
-
-    // Update the bet mining.
-    function setBetMining(address _betMiningAddr) external onlyAdmin {
-        betMining = IBetMining(_betMiningAddr);
-        emit SetBetMining(_betMiningAddr);
-    }
-
-    // Update the random generator.
-    function setRandomGenerator(address _randomGeneratorAddr) external onlyAdmin {
+    function setContract(address _router, address _oracleAddr, address _luckyPowerAddr, address _betMiningAddr, address _randomGeneratorAddr, address _diceReferralAddr) external onlyAdmin {
         require(_randomGeneratorAddr != address(0), "Zero");
+        swapRouter = ILuckyChipRouter02(_router);
+        oracle = IOracle(_oracleAddr);
+        luckyPower = ILuckyPower(_luckyPowerAddr);
+        betMining = IBetMining(_betMiningAddr);
         randomGenerator = IRandomGenerator(_randomGeneratorAddr);
-        emit SetRandomGenerator(_randomGeneratorAddr);
+        diceReferral = IDiceReferral(_diceReferralAddr);
+        emit SetContract(_router, _oracleAddr, _luckyPowerAddr, _betMiningAddr, _randomGeneratorAddr, _diceReferralAddr);
     }
 
     function setFullyWithdrawTh(uint256 _fullyWithdrawTh) external onlyAdmin {
@@ -698,10 +679,14 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             _safeTransferBNB(adminAddr, privateFeeAmount);
         }
 
+        if(amount > 0 && address(diceReferral) != address(0) && _referrer != address(0) && _referrer != gambler){
+            diceReferral.recordReferrer(gambler, _referrer);
+        }
+
         uint256 requestId = randomGenerator.getPrivateRandomNumber();
         betMap[requestId] = bets.length;
 
-        userBets[msg.sender].push(bets.length);
+        userBets[gambler].push(bets.length);
 
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
         emit PrivateBetPlaced(bets.length, gambler, _referrer, amount, numbers);
@@ -720,7 +705,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         ));
 
         if(address(betMining) != address(0)){
-            betMining.bet(msg.sender, _referrer, WBNB, amount);
+            betMining.bet(gambler, _referrer, WBNB, amount);
         }
     }
 
@@ -777,6 +762,16 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             uint256 lotteryAmount = gapAmount.mul(lotteryRate).div(TOTAL_RATE);
             totalLotteryAmount = totalLotteryAmount.add(lotteryAmount);
             tmpBankerAmount = tmpBankerAmount.sub(lotteryAmount);
+
+            if (address(diceReferral) != address(0)){
+                address referrer = diceReferral.getReferrer(bet.gambler);
+                uint256 referralAmount = gapAmount.mul(privateReferralRate).div(TOTAL_RATE);
+                if (referralAmount > 0 && referrer != address(0)) {
+                    _safeTransferBNB(address(diceReferral), referralAmount);
+                    diceReferral.recordCommission(bet.gambler, referrer, referralAmount);
+                    tmpBankerAmount = tmpBankerAmount.sub(referralAmount);
+                }
+            }
 
             bankerAmount = tmpBankerAmount;
             bet.winAmount = winAmount;
