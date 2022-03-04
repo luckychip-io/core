@@ -137,7 +137,7 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
     event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 treasuryRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate, uint256 privateReferralRate);
     event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount, uint256 minPrivateFeeAmount, uint256 minPrivateBetAmount);
     event SetRatios(uint256 maxBetRatio, uint256 maxLostRatio, uint256 withdrawFeeRatio, uint256 maxPrivateBetRatio);
-    event SetContract(address swapRouterAddr, address oracleAddr, address luckyPowerAddr, address betMiningAddr, address randomGeneratorAddr, address diceReferralAddr);
+    event SetContract(address lcTokenAddr, address swapRouterAddr, address oracleAddr, address luckyPowerAddr, address betMiningAddr, address randomGeneratorAddr, address diceReferralAddr);
     event StartRound(uint256 indexed epoch);
     event LockRound(uint256 indexed epoch);
     event SendSecretRound(uint256 indexed epoch, uint8 finalNumber);
@@ -254,15 +254,16 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Update the swap router.
-    function setContract(address _router, address _oracleAddr, address _luckyPowerAddr, address _betMiningAddr, address _randomGeneratorAddr, address _diceReferralAddr) external onlyAdmin {
+    function setContract(address _lcTokenAddr, address _router, address _oracleAddr, address _luckyPowerAddr, address _betMiningAddr, address _randomGeneratorAddr, address _diceReferralAddr) external onlyAdmin {
         require(_randomGeneratorAddr != address(0), "Zero");
+        lcToken = LCToken(_lcTokenAddr);
         swapRouter = ILuckyChipRouter02(_router);
         oracle = IOracle(_oracleAddr);
         luckyPower = ILuckyPower(_luckyPowerAddr);
         betMining = IBetMining(_betMiningAddr);
         randomGenerator = IRandomGenerator(_randomGeneratorAddr);
         diceReferral = IDiceReferral(_diceReferralAddr);
-        emit SetContract(_router, _oracleAddr, _luckyPowerAddr, _betMiningAddr, _randomGeneratorAddr, _diceReferralAddr);
+        emit SetContract(_lcTokenAddr, _router, _oracleAddr, _luckyPowerAddr, _betMiningAddr, _randomGeneratorAddr, _diceReferralAddr);
     }
 
     function setFullyWithdrawTh(uint256 _fullyWithdrawTh) external onlyAdmin {
@@ -568,6 +569,10 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
             }
             return (length, values);
         }
+    }
+
+    function getBetsLength() external view returns (uint256){
+        return bets.length;
     }
     
     // Return user private bet info

@@ -12,11 +12,11 @@ module.exports = {
   },
   networks: {
     testnet: {
-      provider: () => new HDWalletProvider(process.env.TESTNET_MNEMONIC, 'https://data-seed-prebsc-1-s1.binance.org:8545'),
+      provider: () => new HDWalletProvider(process.env.TESTNET_MNEMONIC, process.env.TESTNET_NODE_URL),
       network_id: 97
     },
     mainnet: {
-      provider: () => new HDWalletProvider(process.env.MAINNET_MNEMONIC, 'https://bsc-dataseed.binance.org/'),
+      provider: () => new HDWalletProvider(process.env.MAINNET_MNEMONIC, process.env.MAINNET_NODE_URL),
       network_id: 56
     }
   },
@@ -34,6 +34,7 @@ module.exports = {
       settings: {          // See the solidity docs for advice about optimization and evmVersion
         optimizer: {
           enabled: true,
+          //runs: 999999
           runs: 200
         },
         evmVersion: "istanbul"
