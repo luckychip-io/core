@@ -10,7 +10,7 @@ import "../interfaces/IBEP20.sol";
 import "../interfaces/IWBNB.sol";
 import "../interfaces/IDice.sol";
 import "../interfaces/IOracle.sol";
-import "../interfaces/ILuckyChipRouter02.sol";
+import "../interfaces/IPancakeRouter02.sol";
 import "../interfaces/IBetMining.sol";
 import "../interfaces/ILuckyPower.sol";
 import "../interfaces/IRandomGenerator.sol";
@@ -35,9 +35,9 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public playerTimeBlocks;
     uint256 public bankerTimeBlocks;
     uint256 public constant TOTAL_RATE = 10000; // 100%
-    uint256 public gapRate = 200; // 2% for non-lc table
+    uint256 public gapRate = 220; // 2% for non-lc table
+    uint256 public teamRate = 500; // 5% in gap
     uint256 public treasuryRate = 500; // 5% in gap
-    uint256 public burnRate = 500; // 5% in gap
     uint256 public bonusRate = 2000; // 20% in gap
     uint256 public lotteryRate = 500; // 5% in gap
     uint256 public minBetAmount;
@@ -56,14 +56,15 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     uint256 public maxPrivateBetRatio = 100; // Maximum private bet amount
 
     address public adminAddr;
+    address public teamAddr;
     address public treasuryAddr;
     address public lotteryAddr;
     IOracle public oracle;
     ILuckyPower public luckyPower;
     address public immutable WBNB;
-    LCToken public lcToken;
+    IBEP20 public lcToken;
     DiceToken public diceToken;    
-    ILuckyChipRouter02 public swapRouter;
+    IPancakeRouter02 public swapRouter;
     IBetMining public betMining;
     IRandomGenerator public randomGenerator;
     IDiceReferral public diceReferral;
@@ -83,7 +84,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         uint256 totalAmount;
         uint256 maxBetAmount;
         uint256[6] betAmounts;
-        uint256 burnAmount;
+        uint256 treasuryAmount;
         uint256 bonusAmount;
         uint256 lotteryAmount;
         uint256 betUsers;
@@ -127,16 +128,16 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint256[]) public userBets;
 
     // for public dice
-    mapping(uint256 => Round) public rounds;    
+    mapping(uint256 => Round) public rounds;
     mapping(uint256 => uint256) public roundMap; // Mapping requestId returned by Chainlink VRF to round Id.
     mapping(uint256 => mapping(address => BetInfo)) public ledger;
     mapping(address => uint256[]) public userRounds;
     mapping(address => BankerInfo) public bankerInfo;
 
-    event SetAdmin(address adminAddr, address treasuryAddr, address lotteryAddr);
+    event SetAdmin(address adminAddr, address teamAddr, address treasuryAddr, address lotteryAddr);
     event SetBlocks(uint256 playerTimeBlocks, uint256 bankerTimeBlocks);
-    event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 treasuryRate, uint256 burnRate, uint256 bonusRate, uint256 lotteryRate, uint256 privateReferralRate);
-    event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount, uint256 minPrivateFeeAmount, uint256 minPrivateBetAmount);
+    event SetRates(uint256 gapRate, uint256 privateGapRate, uint256 teamRate, uint256 treasuryRate, uint256 bonusRate, uint256 lotteryRate, uint256 privateReferralRate);
+    event SetAmounts(uint256 minBetAmount, uint256 feeAmount, uint256 maxBankerAmount, uint256 minPrivateBetAmount, uint256 minPrivateFeeAmount);
     event SetRatios(uint256 maxBetRatio, uint256 maxLostRatio, uint256 withdrawFeeRatio, uint256 maxPrivateBetRatio);
     event SetContract(address lcTokenAddr, address swapRouterAddr, address oracleAddr, address luckyPowerAddr, address betMiningAddr, address randomGeneratorAddr, address diceReferralAddr);
     event StartRound(uint256 indexed epoch);
@@ -144,7 +145,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     event SendSecretRound(uint256 indexed epoch, uint8 finalNumber);
     event BetNumber(address indexed sender, uint256 indexed currentEpoch, bool[6] numbers, uint256 amount);
     event ClaimReward(address indexed sender, uint256 amount);
-    event RewardsCalculated(uint256 indexed epoch, uint256 burnAmount, uint256 bonusAmount,uint256 lotteryAmount);
+    event RewardsCalculated(uint256 indexed epoch, uint256 treasuryAmount, uint256 bonusAmount,uint256 lotteryAmount);
     event EndPlayerTime(uint256 epoch);
     event EndBankerTime(uint256 epoch);
     event UpdateNetValue(uint256 epoch, uint256 netValue);
@@ -161,6 +162,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         address _diceTokenAddr,
         address _luckyPowerAddr,
         address _randomGeneratorAddr,
+        address _teamAddr,
         address _treasuryAddr,
         address _lotteryAddr,
         uint256 _intervalBlocks,
@@ -177,6 +179,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         diceToken = DiceToken(_diceTokenAddr);
         luckyPower = ILuckyPower(_luckyPowerAddr);
         randomGenerator = IRandomGenerator(_randomGeneratorAddr);
+        teamAddr = _teamAddr;
         treasuryAddr = _treasuryAddr;
         lotteryAddr = _lotteryAddr;
         intervalBlocks = _intervalBlocks;
@@ -213,26 +216,26 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set rates
-    function setRates(uint256 _gapRate, uint256 _privateGapRate, uint256 _treasuryRate, uint256 _burnRate, uint256 _bonusRate, uint256 _lotteryRate, uint256 _privateReferralRate) external onlyAdmin {
-        require(_gapRate <= 1000 && _privateGapRate <= 1000 && _treasuryRate.add(_burnRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE && _privateReferralRate <= 2000, "rate limit");
+    function setRates(uint256 _gapRate, uint256 _privateGapRate, uint256 _teamRate, uint256 _treasuryRate, uint256 _bonusRate, uint256 _lotteryRate, uint256 _privateReferralRate) external onlyAdmin {
+        require(_gapRate <= 1000 && _privateGapRate <= 1000 && _teamRate.add(_treasuryRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE && _privateReferralRate <= 2000, "rate limit");
         gapRate = _gapRate;
         privateGapRate = _privateGapRate;
+        teamRate = _teamRate;
         treasuryRate = _treasuryRate;
-        burnRate = _burnRate;
         bonusRate = _bonusRate;
         lotteryRate = _lotteryRate;
         privateReferralRate = _privateReferralRate;
-        emit SetRates(gapRate, privateGapRate, treasuryRate, burnRate, bonusRate, lotteryRate, privateReferralRate);
+        emit SetRates(gapRate, privateGapRate, teamRate, treasuryRate, bonusRate, lotteryRate, privateReferralRate);
     }
 
     // set amounts
-    function setAmounts(uint256 _minBetAmount, uint256 _feeAmount, uint256 _maxBankerAmount, uint256 _privateFeeAmount, uint256 _minPrivateBetAmount) external onlyAdmin {
+    function setAmounts(uint256 _minBetAmount, uint256 _feeAmount, uint256 _maxBankerAmount, uint256 _minPrivateBetAmount, uint256 _privateFeeAmount) external onlyAdmin {
         minBetAmount = _minBetAmount;
         feeAmount = _feeAmount;
         maxBankerAmount = _maxBankerAmount;
-        privateFeeAmount = _privateFeeAmount;
         minPrivateBetAmount = _minPrivateBetAmount;
-        emit SetAmounts(minBetAmount, feeAmount, maxBankerAmount, privateFeeAmount, minPrivateBetAmount);
+        privateFeeAmount = _privateFeeAmount;
+        emit SetAmounts(minBetAmount, feeAmount, maxBankerAmount, minPrivateBetAmount, privateFeeAmount);
     }
 
     // set ratios
@@ -246,19 +249,20 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set admin address
-    function setAdmin(address _adminAddr, address _treasuryAddr, address _lotteryAddr) external onlyOwner {
-        require(_adminAddr != address(0) && _treasuryAddr != address(0) && _lotteryAddr != address(0), "Zero");
+    function setAdmin(address _adminAddr, address _teamAddr, address _treasuryAddr, address _lotteryAddr) external onlyOwner {
+        require(_adminAddr != address(0) && _teamAddr != address(0) && _treasuryAddr != address(0) && _lotteryAddr != address(0), "Zero");
         adminAddr = _adminAddr;
+        teamAddr = _teamAddr;
         treasuryAddr = _treasuryAddr;
         lotteryAddr = _lotteryAddr;
-        emit SetAdmin(adminAddr, treasuryAddr, lotteryAddr);
+        emit SetAdmin(adminAddr, teamAddr, treasuryAddr, lotteryAddr);
     }
 
     // Update the swap router.
     function setContract(address _lcTokenAddr, address _router, address _oracleAddr, address _luckyPowerAddr, address _betMiningAddr, address _randomGeneratorAddr, address _diceReferralAddr) external onlyAdmin {
         require(_randomGeneratorAddr != address(0), "Zero");
         lcToken = LCToken(_lcTokenAddr);
-        swapRouter = ILuckyChipRouter02(_router);
+        swapRouter = IPancakeRouter02(_router);
         oracle = IOracle(_oracleAddr);
         luckyPower = ILuckyPower(_luckyPowerAddr);
         betMining = IBetMining(_betMiningAddr);
@@ -468,19 +472,19 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     function _claimBonusAndLottery() internal {
         if(publicBetAmount > 0 || privateBetAmount > 0){
             uint256 gapAmount = publicBetAmount.mul(gapRate).div(TOTAL_RATE) + privateBetAmount.mul(privateGapRate).div(TOTAL_RATE);
-            uint256 totalTreasuryAmount = 0;
+            uint256 totalTeamAmount = 0;
 
-            uint256 burnAmount = gapAmount.mul(burnRate).div(TOTAL_RATE);
-            if(burnAmount > 0){
+            uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
+            if(treasuryAmount > 0){
                 if(address(swapRouter) != address(0)){
                     address[] memory path = new address[](2);
                     path[0] = WBNB;
                     path[1] = address(lcToken);
-                    uint256 amountOut = swapRouter.getAmountsOut(burnAmount, path)[1];
-                    uint256 lcAmount = swapRouter.swapExactETHForTokens{value: burnAmount}(amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
-                    lcToken.burn(address(this), lcAmount);
+                    uint256 amountOut = swapRouter.getAmountsOut(treasuryAmount, path)[1];
+                    uint256 lcAmount = swapRouter.swapExactETHForTokens{value: treasuryAmount}(amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
+                    lcToken.safeTransfer(treasuryAddr, lcAmount);
                 }else{
-                    totalTreasuryAmount = totalTreasuryAmount.add(burnAmount);
+                    totalTeamAmount = totalTeamAmount.add(treasuryAmount);
                 }
             }
 
@@ -491,14 +495,14 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
                     assert(IWBNB(WBNB).transfer(address(luckyPower), bonusAmount));
                     luckyPower.updateBonus(WBNB, bonusAmount);
                 }else{
-                    totalTreasuryAmount = totalTreasuryAmount.add(bonusAmount);
+                    totalTeamAmount = totalTeamAmount.add(bonusAmount);
                 }
             }
 
-            uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
-            totalTreasuryAmount = totalTreasuryAmount.add(treasuryAmount);
-            if(totalTreasuryAmount > 0){
-                _safeTransferBNB(treasuryAddr, totalTreasuryAmount);
+            uint256 teamAmount = gapAmount.mul(teamRate).div(TOTAL_RATE);
+            totalTeamAmount = totalTeamAmount.add(teamAmount);
+            if(totalTeamAmount > 0){
+                _safeTransferBNB(teamAddr, totalTeamAmount);
             }
 
             uint256 lotteryAmount = gapAmount.mul(lotteryRate).div(TOTAL_RATE);
@@ -605,8 +609,8 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         if(rounds[epoch].bonusAmount == 0){
             Round storage round = rounds[epoch];
 
+            uint256 teamAmount = 0;
             uint256 treasuryAmount = 0;
-            uint256 burnAmount = 0;
             uint256 bonusAmount = 0;
             uint256 lotteryAmount = 0;
             
@@ -620,20 +624,20 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
                 gapAmount = round.betAmounts[i].mul(gapRate).div(TOTAL_RATE);
 
+                teamAmount = teamAmount.add(gapAmount.mul(teamRate).div(TOTAL_RATE));
                 treasuryAmount = treasuryAmount.add(gapAmount.mul(treasuryRate).div(TOTAL_RATE));
-                burnAmount = burnAmount.add(gapAmount.mul(burnRate).div(TOTAL_RATE));
                 bonusAmount = bonusAmount.add(gapAmount.mul(bonusRate).div(TOTAL_RATE));
                 lotteryAmount = lotteryAmount.add(gapAmount.mul(lotteryRate).div(TOTAL_RATE));
             }
-            tmpBankerAmount = tmpBankerAmount.sub(treasuryAmount).sub(burnAmount).sub(bonusAmount).sub(lotteryAmount);
+            tmpBankerAmount = tmpBankerAmount.sub(teamAmount).sub(treasuryAmount).sub(bonusAmount).sub(lotteryAmount);
             bankerAmount = tmpBankerAmount;
             publicBetAmount = publicBetAmount.add(round.totalAmount);
 
-            round.burnAmount = burnAmount;
+            round.treasuryAmount = treasuryAmount;
             round.bonusAmount = bonusAmount;
             round.lotteryAmount = lotteryAmount;
 
-            emit RewardsCalculated(epoch, round.burnAmount, round.bonusAmount, round.lotteryAmount);
+            emit RewardsCalculated(epoch, round.treasuryAmount, round.bonusAmount, round.lotteryAmount);
         }
     }
 
@@ -716,7 +720,7 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             privateBetAmount = privateBetAmount.add(amount);
 
             uint256 gapAmount = amount.mul(privateGapRate).div(TOTAL_RATE);
-            tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(treasuryRate.add(burnRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
+            tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(teamRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
             if (address(diceReferral) != address(0)){
                 address referrer = diceReferral.getReferrer(bet.gambler);
                 uint256 referralAmount = gapAmount.mul(privateReferralRate).div(TOTAL_RATE);
@@ -795,15 +799,15 @@ contract DiceBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         require(_diceTokenAmount > 0 && _diceTokenAmount <= banker.diceTokenAmount, "0 < diceTokenAmount <= banker.diceTokenAmount");
         uint256 ratio = getWithdrawFeeRatio(msg.sender);
         banker.diceTokenAmount = banker.diceTokenAmount.sub(_diceTokenAmount); 
-        SafeBEP20.safeTransferFrom(diceToken, msg.sender, address(diceToken), _diceTokenAmount);
-        diceToken.burn(address(diceToken), _diceTokenAmount);
+        SafeBEP20.safeTransferFrom(diceToken, msg.sender, address(this), _diceTokenAmount);
+        diceToken.burn(address(this), _diceTokenAmount);
         uint256 tokenAmount = _diceTokenAmount.mul(netValue).div(1e12);
         bankerAmount = bankerAmount.sub(tokenAmount);
 
         if(ratio > 0){
             uint256 withdrawFee = tokenAmount.mul(ratio).div(TOTAL_RATE);
             if(withdrawFee > 0){
-                _safeTransferBNB(treasuryAddr, withdrawFee);
+                _safeTransferBNB(teamAddr, withdrawFee);
             }
             tokenAmount = tokenAmount.sub(withdrawFee);
         }
