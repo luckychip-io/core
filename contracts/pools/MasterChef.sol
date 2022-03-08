@@ -71,7 +71,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     //treasury fund percent from token per block
     uint256 public treasuryPercent;
     //Eco fund percent from token per block
-    uint256 public ecoPercent;
+    uint256 public dailyReferralPercent;
     // Dev0 address.
     address public dev0Addr;
     // Dev1 address.
@@ -79,7 +79,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     // Treasury fund.
     address public treasuryAddr;
     // Eco fund.
-    address public ecoAddr;
+    address public dailyReferralAddr;
     // Last block then develeper withdraw dev and ref fee
     uint256 public lastBlockDevWithdraw;
     // LC tokens created per block.
@@ -114,12 +114,12 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
     uint16 public referralCommissionRate = 500;
 
     event SetDevAddress(address indexed dev0Addr, address indexed dev1Addr);
-    event SetEcoAddress(address indexed ecoAddr);
+    event SetEcoAddress(address indexed dailyReferralAddr);
     event SetTreasuryAddress(address indexed treasuryAddr);
     event SetDevFeeReduction(uint256 devFeeReduction);
     event UpdateLcPerBlock(uint256 lcPerBlock);
     event SetReferralCommissionRate(uint256 commissionRate);
-    event SetPercent(uint256 stakingPercent, uint256 dev0Percent, uint256 dev1Percent, uint256 ecoPercent, uint256 treasuryPercent);
+    event SetPercent(uint256 stakingPercent, uint256 dev0Percent, uint256 dev1Percent, uint256 dailyReferralPercent, uint256 treasuryPercent);
     event SetLcReferral(address _lcReferral);
     event SetLuckyPower(address _luckyPower);
 
@@ -138,32 +138,32 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         LCToken _LC,
         address _dev0Addr,
         address _dev1Addr,
-        address _ecoAddr,
+        address _dailyReferralAddr,
         address _treasuryAddr,
         uint256 _LCPerBlock,
         uint256 _startBlock,
         uint256 _stakingPercent,
         uint256 _dev0Percent,
         uint256 _dev1Percent,
-        uint256 _ecoPercent,
+        uint256 _dailyReferralPercent,
         uint256 _treasuryPercent
     ) public {
         LC = _LC;
         dev0Addr = _dev0Addr;
         dev1Addr = _dev1Addr;
-        ecoAddr = _ecoAddr;
+        dailyReferralAddr = _dailyReferralAddr;
         treasuryAddr = _treasuryAddr;
         LCPerBlock = _LCPerBlock;
         startBlock = _startBlock;
         stakingPercent = _stakingPercent;
         dev0Percent = _dev0Percent;
         dev1Percent = _dev1Percent;
-        ecoPercent = _ecoPercent;
+        dailyReferralPercent = _dailyReferralPercent;
         treasuryPercent = _treasuryPercent;
         lastBlockDevWithdraw = _startBlock;
         EnumerableSet.add(_tokenomicAddrs, dev0Addr);
         EnumerableSet.add(_tokenomicAddrs, dev1Addr);
-        EnumerableSet.add(_tokenomicAddrs, ecoAddr);
+        EnumerableSet.add(_tokenomicAddrs, dailyReferralAddr);
         EnumerableSet.add(_tokenomicAddrs, treasuryAddr);
     }
 
@@ -182,7 +182,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         uint256 LCReward = multiplier.mul(LCPerBlock);
         LC.mint(dev0Addr, LCReward.mul(dev0Percent).div(percentDec));
         LC.mint(dev1Addr, LCReward.mul(dev1Percent).div(percentDec));
-        LC.mint(ecoAddr, LCReward.mul(ecoPercent).div(percentDec));
+        LC.mint(dailyReferralAddr, LCReward.mul(dailyReferralPercent).div(percentDec));
         LC.mint(treasuryAddr, LCReward.mul(treasuryPercent).div(percentDec));
         lastBlockDevWithdraw = block.number;
     }
@@ -476,8 +476,8 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dev0Percent).div(percentDec);
             }else if(account == dev1Addr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dev1Percent).div(percentDec);
-            }else if(account == ecoAddr){
-                devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(ecoPercent).div(percentDec);
+            }else if(account == dailyReferralAddr){
+                devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(dailyReferralPercent).div(percentDec);
             }else if(account == treasuryAddr){
                 devPending = getMultiplier(lastBlockDevWithdraw, block.number).mul(LCPerBlock).mul(treasuryPercent).div(percentDec);
             }
@@ -503,12 +503,12 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         EnumerableSet.add(_tokenomicAddrs, dev1Addr);
         emit SetDevAddress(dev0Addr, dev1Addr);
     }
-    function setEcoAddress(address _ecoAddr) public onlyOwner{
-        require(_ecoAddr != address(0), "Zero");
-        EnumerableSet.remove(_tokenomicAddrs, ecoAddr);
-        ecoAddr = _ecoAddr;
-        EnumerableSet.add(_tokenomicAddrs, ecoAddr);
-        emit SetEcoAddress(ecoAddr);
+    function setEcoAddress(address _dailyReferralAddr) public onlyOwner{
+        require(_dailyReferralAddr != address(0), "Zero");
+        EnumerableSet.remove(_tokenomicAddrs, dailyReferralAddr);
+        dailyReferralAddr = _dailyReferralAddr;
+        EnumerableSet.add(_tokenomicAddrs, dailyReferralAddr);
+        emit SetEcoAddress(dailyReferralAddr);
     }
     function setTreasuryAddress(address _treasuryAddr) public onlyOwner{
         require(_treasuryAddr != address(0), "Zero");
@@ -530,15 +530,15 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
         emit SetReferralCommissionRate(referralCommissionRate);
     }
 
-    function setPercent(uint256 _stakingPercent, uint256 _dev0Percent, uint256 _dev1Percent, uint256 _ecoPercent, uint256 _treasuryPercent) public onlyOwner{
+    function setPercent(uint256 _stakingPercent, uint256 _dev0Percent, uint256 _dev1Percent, uint256 _dailyReferralPercent, uint256 _treasuryPercent) public onlyOwner{
         uint256 devPercent = _dev0Percent.add(_dev1Percent);
-        require(_stakingPercent.add(devPercent).add(_ecoPercent).add(_treasuryPercent) <= percentDec, "Percent Sum");
+        require(_stakingPercent.add(devPercent).add(_dailyReferralPercent).add(_treasuryPercent) <= percentDec, "Percent Sum");
         stakingPercent = _stakingPercent;
         dev0Percent = _dev0Percent;
         dev1Percent = _dev1Percent;
-        ecoPercent = _ecoPercent;
+        dailyReferralPercent = _dailyReferralPercent;
         treasuryPercent = _treasuryPercent;
-        emit SetPercent(stakingPercent, dev0Percent, dev1Percent, ecoPercent, treasuryPercent);
+        emit SetPercent(stakingPercent, dev0Percent, dev1Percent, dailyReferralPercent, treasuryPercent);
     }
 
     function setWithdrawInterval(uint256 _withdrawInterval) public onlyOwner{
