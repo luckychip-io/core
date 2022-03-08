@@ -14,7 +14,7 @@ import "../interfaces/IDice.sol";
 import '../interfaces/IPancakeFactory.sol';
 import '../interfaces/IPancakePair.sol';
 
-contract Oracle is Ownable, IOracle {
+contract OraclePancake is Ownable, IOracle {
     using FixedPoint for *;
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
