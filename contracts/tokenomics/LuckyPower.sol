@@ -255,7 +255,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
         return (tokens, amounts, length);
     }
 
-    function pendingRewardsBUSD(address account) public view returns (uint256) {
+    function pendingRewardsUSDT(address account) public view returns (uint256) {
         UserInfo storage user = userInfo[account];
         uint256 totalBonus = 0;
         for(uint256 i = 0; i < bonusInfo.length; i ++){
@@ -263,7 +263,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             UserRewardInfo storage userReward = userRewardInfo[i][account];
             uint256 pendingReward = user.quantity.mul(bonus.accRewardPerShare).div(1e12).sub(userReward.rewardDebt);
             if(pendingReward > 0 || userReward.pendingReward > 0){
-                totalBonus = totalBonus.add(oracle.getQuantityBUSD(bonus.token, userReward.pendingReward.add(pendingReward)));
+                totalBonus = totalBonus.add(oracle.getQuantityUSDT(bonus.token, userReward.pendingReward.add(pendingReward)));
             }
         }
         return totalBonus;
@@ -282,7 +282,7 @@ contract LuckyPower is ILuckyPower, Ownable, ReentrancyGuard {
             userReward.pendingReward = 0;
             if(tmpReward > 0){
                 IBEP20(bonus.token).safeTransfer(account, tmpReward);
-                totalRewards = totalRewards.add(oracle.getQuantityBUSD(bonus.token, tmpReward));
+                totalRewards = totalRewards.add(oracle.getQuantityUSDT(bonus.token, tmpReward));
             }
         }
 

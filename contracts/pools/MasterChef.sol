@@ -619,7 +619,7 @@ contract MasterChef is IMasterChef, Ownable, ReentrancyGuard{
                 }
             }
             if(tvlLC > 0){
-                return oracle.getQuantityBUSD(address(LC), tvlLC);
+                return oracle.getQuantityUSDT(address(LC), tvlLC);
             }else{
                 return 0;
             } 

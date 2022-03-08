@@ -7,5 +7,5 @@ interface IOracle {
     function getQuantity(address token, uint256 amount) external view returns (uint256);
     function getLpTokenValue(address _lpToken, uint256 _amount) external view returns (uint256 value);
     function getBankerTokenValue(address _bankerToken, uint256 _amount) external view returns (uint256 value);
-    function getQuantityBUSD(address token, uint256 amount) external view returns (uint256);
+    function getQuantityUSDT(address token, uint256 amount) external view returns (uint256);
 }

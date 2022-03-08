@@ -7,12 +7,12 @@ import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/EnumerableSet.sol';
 import '../libraries/FixedPoint.sol';
 import '../libraries/OracleLibrary.sol';
-import '../libraries/LuckyChipLibrary.sol';
+import '../libraries/PancakeLibrary.sol';
 import "../interfaces/IBEP20.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/IDice.sol";
-import '../interfaces/ILuckyChipFactory.sol';
-import '../interfaces/ILuckyChipPair.sol';
+import '../interfaces/IPancakeFactory.sol';
+import '../interfaces/IPancakePair.sol';
 
 contract Oracle is Ownable, IOracle {
     using FixedPoint for *;
@@ -45,7 +45,7 @@ contract Oracle is Ownable, IOracle {
     }
 
     function update(address tokenA, address tokenB) external override returns (bool) {
-        address pair = LuckyChipLibrary.pairFor(factory, tokenA, tokenB);
+        address pair = PancakeLibrary.pairFor(factory, tokenA, tokenB);
         if (pair == address(0)) return false;
 
         Observation storage observation = pairObservations[pair];
@@ -76,7 +76,7 @@ contract Oracle is Ownable, IOracle {
         uint256 amountIn,
         address tokenOut
     ) private view returns (uint256 amountOut) {
-        address pair = LuckyChipLibrary.pairFor(factory, tokenIn, tokenOut);
+        address pair = PancakeLibrary.pairFor(factory, tokenIn, tokenOut);
         if (pair == address(0)) return 0;
 
         Observation memory observation = pairObservations[pair];
@@ -86,7 +86,7 @@ contract Oracle is Ownable, IOracle {
         }
         if(timeElapsed == 0){
             (uint112 reserve0, uint112 reserve1,) = ILuckyChipPair(pair).getReserves();
-            (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
+            (address token0, ) = PancakeLibrary.sortTokens(tokenIn, tokenOut);
             if (token0 == tokenIn) {
                 return (reserve0 != 0) ? uint256(reserve1).mul(amountIn).div(uint256(reserve0)) : 0;
             }else{
@@ -94,7 +94,7 @@ contract Oracle is Ownable, IOracle {
             }
         }else{
             (uint256 price0Cumulative, uint256 price1Cumulative, ) = OracleLibrary.currentCumulativePrices(pair);
-            (address token0, ) = LuckyChipLibrary.sortTokens(tokenIn, tokenOut);
+            (address token0, ) = PancakeLibrary.sortTokens(tokenIn, tokenOut);
 
             if (token0 == tokenIn) {
                 return computeAmountOut(observation.price0Cumulative, price0Cumulative, timeElapsed, amountIn);
@@ -128,15 +128,15 @@ contract Oracle is Ownable, IOracle {
         uint256 amount = 10**decimal;
         if (token == anchorToken) {
             price = amount;
-        } else if (ILuckyChipFactory(factory).getPair(token, anchorToken) != address(0)) {
+        } else if (IPancakeFactory(factory).getPair(token, anchorToken) != address(0)) {
             price = consult(token, amount, anchorToken);
         } else {
             uint256 length = getRouterTokenLength();
             for (uint256 index = 0; index < length; index++) {
                 address intermediate = getRouterToken(index);
                 if (
-                    LuckyChipLibrary.pairFor(factory, token, intermediate) != address(0) &&
-                    LuckyChipLibrary.pairFor(factory, intermediate, anchorToken) != address(0)
+                    PancakeLibrary.pairFor(factory, token, intermediate) != address(0) &&
+                    PancakeLibrary.pairFor(factory, intermediate, anchorToken) != address(0)
                 ) {
                     uint256 interPrice = consult(token, amount, intermediate);
                     price = consult(intermediate, interPrice, anchorToken);
@@ -152,20 +152,20 @@ contract Oracle is Ownable, IOracle {
 
         if (token == anchorToken) {
             price = 10**anchorTokenDecimal;
-        } else if (LuckyChipLibrary.pairFor(factory, token, anchorToken) != address(0)) {
-            (uint256 reserve0, uint256 reserve1) = LuckyChipLibrary.getReserves(factory, token, anchorToken);
+        } else if (PancakeLibrary.pairFor(factory, token, anchorToken) != address(0)) {
+            (uint256 reserve0, uint256 reserve1) = PancakeLibrary.getReserves(factory, token, anchorToken);
             price = (10**tokenDecimal).mul(reserve1).div(reserve0);
         } else {
             uint256 length = getRouterTokenLength();
             for (uint256 index = 0; index < length; index++) {
                 address intermediate = getRouterToken(index);
                 if (
-                    LuckyChipLibrary.pairFor(factory, token, intermediate) != address(0) &&
-                    LuckyChipLibrary.pairFor(factory, intermediate, anchorToken) != address(0)
+                    PancakeLibrary.pairFor(factory, token, intermediate) != address(0) &&
+                    PancakeLibrary.pairFor(factory, intermediate, anchorToken) != address(0)
                 ) {
-                    (uint256 reserve0, uint256 reserve1) = LuckyChipLibrary.getReserves(factory, token, intermediate);
+                    (uint256 reserve0, uint256 reserve1) = PancakeLibrary.getReserves(factory, token, intermediate);
                     uint256 amountOut = 10**tokenDecimal.mul(reserve1).div(reserve0);
-                    (uint256 reserve2, uint256 reserve3) = LuckyChipLibrary.getReserves(factory, intermediate, anchorToken);
+                    (uint256 reserve2, uint256 reserve3) = PancakeLibrary.getReserves(factory, intermediate, anchorToken);
                     price = amountOut.mul(reserve3).div(reserve2);
                     break;
                 }
@@ -179,7 +179,7 @@ contract Oracle is Ownable, IOracle {
         address token1 = ILuckyChipPair(_lpToken).token1();
         uint256 token0Decimal = IBEP20(token0).decimals();
         uint256 token1Decimal = IBEP20(token1).decimals();
-        (uint256 reserve0, uint256 reserve1) = LuckyChipLibrary.getReserves(factory, token0, token1);
+        (uint256 reserve0, uint256 reserve1) = PancakeLibrary.getReserves(factory, token0, token1);
 
         uint256 token0Value = (getAveragePrice(token0)).mul(reserve0).div(10**token0Decimal);
         uint256 token1Value = (getAveragePrice(token1)).mul(reserve1).div(10**token1Decimal);
