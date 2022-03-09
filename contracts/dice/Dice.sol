@@ -476,12 +476,14 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
 
             uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
             if(treasuryAmount > 0){
-                if(address(swapRouter) != address(0)){
+                if(address(token) == address(lcToken)){
+                    lcToken.safeTransfer(treasuryAddr, treasuryAmount);
+                }else if(address(swapRouter) != address(0)){
                     address[] memory path = new address[](2);
                     path[0] = address(token);
                     path[1] = address(lcToken);
                     uint256 amountOut = swapRouter.getAmountsOut(treasuryAmount, path)[1];
-                    uint256 lcAmount = swapRouter.swapExactETHForTokens{value: treasuryAmount}(amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
+                    uint256 lcAmount = swapRouter.swapExactTokensForTokens(treasuryAmount, amountOut.mul(5).div(10), path, address(this), block.timestamp + (5 minutes))[1];
                     lcToken.safeTransfer(treasuryAddr, lcAmount);
                 }else{
                     totalOperationAmount = totalOperationAmount.add(treasuryAmount);
