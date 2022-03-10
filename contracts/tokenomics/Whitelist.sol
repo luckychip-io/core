@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IBEP20.sol";
 import "../libraries/SafeBEP20.sol";
 
-contract WhiteList is Ownable, ReentrancyGuard{
+contract Whitelist is Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;
 
