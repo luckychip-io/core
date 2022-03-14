@@ -8,6 +8,10 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IBEP20.sol";
 import "../libraries/SafeBEP20.sol";
 
+interface ISeasonDice {
+    function getUserBetCount(address user) external view returns (uint256);
+}
+
 contract Whitelist is Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;
@@ -19,6 +23,9 @@ contract Whitelist is Ownable, ReentrancyGuard{
     address[] public accounts;
     mapping(address => bool) public inWhiteist;
     mapping(address => uint256) private _balances;
+
+    ISeasonDice bnbDice;
+    ISeasonDice usdtDice;
 
     event JoinWhitelist(address indexed user, uint256 amount);
 
@@ -36,8 +43,24 @@ contract Whitelist is Ownable, ReentrancyGuard{
         return size > 0;
     }
 
+    constructor(address _bnbDiceAddr, address _usdtDiceAddr) public {
+        bnbDice = ISeasonDice(_bnbDiceAddr);
+        usdtDice = ISeasonDice(_usdtDiceAddr);
+    }
+
+    function canJoin(address account) public view returns (bool) {
+        if(address(bnbDice) != address(0) && bnbDice.getUserBetCount(account) > 0){
+            return true;
+        }else if(address(usdtDice) != address(0) && usdtDice.getUserBetCount(account) > 0){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
     function joinWhitelist() external payable nonReentrant notContract{
         address account = msg.sender;
+        require(canJoin(account), "Play dice more than once");
         uint256 amount = msg.value;
         require(amount >= MIN_AMOUNT && amount <= MAX_AMOUNT, "within 0.1 and 1 BNB");
 
@@ -51,6 +74,12 @@ contract Whitelist is Ownable, ReentrancyGuard{
         _balances[account] = _balances[account].add(amount);
 
         emit JoinWhitelist(account, amount);
+    }
+
+    function setDice(address _bnbDiceAddr, address _usdtDiceAddr) external onlyOwner{
+        require(_bnbDiceAddr != address(0) && _usdtDiceAddr != address(0), "Zero");
+        bnbDice = ISeasonDice(_bnbDiceAddr);
+        usdtDice = ISeasonDice(_usdtDiceAddr);
     }
 
     function balanceOf(address account) public view returns (uint256) {
