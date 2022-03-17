@@ -156,4 +156,20 @@ contract Lottery is ILottery, Ownable, ReentrancyGuard{
         luckyPower = ILuckyPower(_luckyPower);
         emit SetLuckyPower(block.number, _luckyPower);
     }
+
+    function _safeTransferBNB(address to, uint256 value) internal {
+        (bool success, ) = to.call{gas: 23000, value: value}("");
+        require(success, 'BNB_TRANSFER_FAILED');
+    }
+
+    // Owner can withdraw BNB funds
+    function withdrawFunds(uint withdrawAmount) external onlyOwner {
+        require(withdrawAmount <= address(this).balance, "Withdrawal exceeds limit");
+        _safeTransferBNB(owner(), withdrawAmount);
+    }
+
+    // Withdraw tokens in emergency
+    function withdrawTokens(address _tokenAddress, uint256 _tokenAmount) external onlyOwner {
+        IBEP20(_tokenAddress).safeTransfer(address(msg.sender), _tokenAmount);
+    }
 }
