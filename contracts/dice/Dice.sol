@@ -725,12 +725,16 @@ contract Dice is IDice, Ownable, ReentrancyGuard, Pausable {
             uint256 gapAmount = amount.mul(privateGapRate).div(TOTAL_RATE);
             tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
             if (address(diceReferral) != address(0)){
-                address referrer = diceReferral.getReferrer(bet.gambler);
                 uint256 referralAmount = gapAmount.mul(privateReferralRate).div(TOTAL_RATE);
-                if (referralAmount > 0 && referrer != address(0)) {
+                if (referralAmount > 0) {
+                    address referrer = diceReferral.getReferrer(bet.gambler);
                     token.safeTransfer(address(diceReferral), referralAmount);
-                    diceReferral.recordCommission(bet.gambler, referrer, referralAmount);
                     tmpBankerAmount = tmpBankerAmount.sub(referralAmount);
+                    if(referrer != address(0)){
+                        diceReferral.recordCommission(bet.gambler, referrer, referralAmount);
+                    }else{
+                        diceReferral.recordCommission(bet.gambler, treasuryAddr, referralAmount);
+                    }
                 }
             }
 
