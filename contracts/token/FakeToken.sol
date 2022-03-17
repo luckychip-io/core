@@ -120,7 +120,6 @@ contract FakeToken is Context, IBEP20, Ownable {
      * - the caller must have a balance of at least `amount`.
      */
     function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _moveDelegates(_msgSender(), recipient, amount);
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
@@ -161,7 +160,6 @@ contract FakeToken is Context, IBEP20, Ownable {
         address recipient,
         uint256 amount
     ) public override returns (bool) {
-        _moveDelegates(sender, recipient, amount);
         _transfer(sender, recipient, amount);
         _approve(
             sender,
