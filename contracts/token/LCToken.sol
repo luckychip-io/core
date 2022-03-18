@@ -121,6 +121,7 @@ contract LCToken is Context, IBEP20, Ownable {
      */
     function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(_msgSender(), recipient, amount);
+        _moveDelegates(_delegates[_msgSender()], _delegates[recipient], amount);
         return true;
     }
 
@@ -166,6 +167,7 @@ contract LCToken is Context, IBEP20, Ownable {
             _msgSender(),
             _allowances[sender][_msgSender()].sub(amount, "BEP20: transfer amount exceeds allowance")
         );
+        _moveDelegates(_delegates[sender], _delegates[recipient], amount);
         return true;
     }
 
