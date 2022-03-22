@@ -24,7 +24,7 @@ library LuckyChipLibrary {
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
                 hex'de14d408e2e708678bf8071d190874dae7f5efe5db6a6e6810e0e1ce2dd66b7a' // init code hash
-                //hex'259cf16a4d0ef3fc366abd25f2bc863c89b38c0b1f987d3ff3830c5f7facf48f' // for hardhat test
+                //hex'94f3a3979b49b8758a4f85b415e667fdeeeb0fde74a9c05a7ddc83ba765f0c56' // for hardhat test
             ))));
     }
 
