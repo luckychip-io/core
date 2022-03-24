@@ -15,6 +15,7 @@ import "../token/DiceToken.sol";
 import "../token/LCToken.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/ILuckyPower.sol";
+import "../interfaces/IFlipRng.sol";
 
 contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
@@ -51,6 +52,7 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     IBEP20 public lcToken;
     DiceToken public diceToken;    
     IPancakeRouter02 public swapRouter;
+    IFlipRng public flipRng;
 
     struct BankerInfo {
         uint256 diceTokenAmount;
@@ -79,6 +81,8 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
 
     // for coinflip
     Bet[] public bets;
+    
+    mapping(uint256 => uint) public betMap; // Mapping requestId to bet Id.
     mapping(address => uint256[]) public userBets;
     mapping(address => BankerInfo) public bankerInfo;
 
@@ -87,7 +91,7 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     event SetRates(uint256 privateGapRate, uint256 operationRate, uint256 treasuryRate, uint256 bonusRate, uint256 lotteryRate);
     event SetAmounts(uint256 maxBankerAmount, uint256 minPrivateBetAmount, uint256 minPrivateFeeAmount);
     event SetRatios(uint256 maxWithdrawFeeRatio, uint256 maxPrivateBetRatio);
-    event SetContract(address lcTokenAddr, address swapRouterAddr, address oracleAddr, address luckyPowerAddr);
+    event SetContract(address lcTokenAddr, address swapRouterAddr, address oracleAddr, address luckyPowerAddr, address flipRngAddr);
     event EndPlayerTime();
     event EndBankerTime();
     event UpdateNetValue(uint256 netValue);
@@ -102,6 +106,7 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         address _WBNBAddr,
         address _lcTokenAddr,
         address _diceTokenAddr,
+        address _flipRngAddr,
         address _operationAddr,
         address _treasuryAddr,
         address _lotteryAddr,
@@ -114,6 +119,7 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
         WBNB = _WBNBAddr;
         lcToken = LCToken(_lcTokenAddr);
         diceToken = DiceToken(_diceTokenAddr);
+        flipRng = IFlipRng(_flipRngAddr);
         operationAddr = _operationAddr;
         treasuryAddr = _treasuryAddr;
         lotteryAddr = _lotteryAddr;
@@ -184,12 +190,13 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Update the swap router.
-    function setContract(address _lcTokenAddr, address _router, address _oracleAddr, address _luckyPowerAddr) external onlyAdmin {
+    function setContract(address _lcTokenAddr, address _router, address _oracleAddr, address _luckyPowerAddr, address _flipRngAddr) external onlyAdmin {
         lcToken = LCToken(_lcTokenAddr);
         swapRouter = IPancakeRouter02(_router);
         oracle = IOracle(_oracleAddr);
         luckyPower = ILuckyPower(_luckyPowerAddr);
-        emit SetContract(_lcTokenAddr, _router, _oracleAddr, _luckyPowerAddr);
+        flipRng = IFlipRng(_flipRngAddr);
+        emit SetContract(_lcTokenAddr, _router, _oracleAddr, _luckyPowerAddr, _flipRngAddr);
     }
 
     function setFullyWithdrawTh(uint256 _fullyWithdrawTh) external onlyAdmin {
@@ -308,6 +315,8 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
             _safeTransferBNB(adminAddr, privateFeeAmount);
         }
 
+        uint256 requestId = flipRng.getPrivateRandomNumber(bets.length);
+        betMap[requestId] = bets.length;
         userBets[gambler].push(bets.length);
 
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
@@ -334,7 +343,10 @@ contract LuckyFlipBNB is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Settle bet. Function can only be called by fulfillRandomness function, which in turn can only be called by Chainlink VRF.
-    function settlePrivateBet(uint256 betId, uint256 randomNumber) external override onlyAdmin nonReentrant {
+    function settlePrivateBet(uint256 requestId, uint256 randomNumber) external override nonReentrant {
+        require(msg.sender == address(flipRng), "Only flipRng");
+
+        uint256 betId = betMap[requestId];
         Bet storage bet = bets[betId];
         uint256 amount = bet.amount;
 
