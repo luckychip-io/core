@@ -11,7 +11,7 @@ import "../interfaces/IWBNB.sol";
 import "../interfaces/IGame.sol";
 import "../interfaces/IRouter.sol";
 import "../libraries/SafeBEP20.sol";
-import "../token/DiceToken.sol";
+import "../token/GameToken.sol";
 import "../token/LCToken.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/ILuckyPower.sol";
@@ -79,11 +79,11 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     ILuckyPower public luckyPower;
     address public immutable WBNB;
     IBEP20 public lcToken;
-    DiceToken public diceToken;
+    GameToken public gameToken;
     IGameRng public gameRng;
 
     struct BankerInfo {
-        uint256 diceTokenAmount;
+        uint256 gameTokenAmount;
         uint256 avgBuyValue;
     }
 
@@ -127,7 +127,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     event EndBankerTime();
     event UpdateNetValue(uint256 netValue);
     event Deposit(address indexed user, uint256 tokenAmount);
-    event Withdraw(address indexed user, uint256 diceTokenAmount);
+    event Withdraw(address indexed user, uint256 gameTokenAmount);
 
     event BetPlaced(uint256 indexed betId, address indexed gambler, uint256 amount, uint8 indexed modulo, uint8 rollUnder, uint40 mask, bool rngOnChain);
     event SwapBetPlaced(uint256 indexed betId, address indexed gambler, address tokenAddr, uint256 tokenAmount, uint256 amount, uint8 indexed modulo, uint8 rollUnder, uint40 mask, bool rngOnChain);
@@ -137,7 +137,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     constructor(
         address _WBNBAddr,
         address _lcTokenAddr,
-        address _diceTokenAddr,
+        address _gameTokenAddr,
         address _gameRngAddr,
         address _operationAddr,
         address _treasuryAddr,
@@ -151,7 +151,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     ) public {
         WBNB = _WBNBAddr;
         lcToken = LCToken(_lcTokenAddr);
-        diceToken = DiceToken(_diceTokenAddr);
+        gameToken = GameToken(_gameTokenAddr);
         gameRng = IGameRng(_gameRngAddr);
         operationAddr = _operationAddr;
         treasuryAddr = _treasuryAddr;
@@ -604,11 +604,11 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         require(_tokenAmount > 0, "Amount > 0");
         require(bankerAmount.add(_tokenAmount) < maxBankerAmount, 'maxBankerAmount Limit');
         BankerInfo storage banker = bankerInfo[msg.sender];
-        uint256 diceTokenAmount = _tokenAmount.mul(1e12).div(netValue);
-        diceToken.mint(address(msg.sender), diceTokenAmount);
-        uint256 totalDiceTokenAmount = banker.diceTokenAmount.add(diceTokenAmount);
-        banker.avgBuyValue = banker.avgBuyValue.mul(banker.diceTokenAmount).div(1e12).add(_tokenAmount).mul(1e12).div(totalDiceTokenAmount);
-        banker.diceTokenAmount = totalDiceTokenAmount;
+        uint256 gameTokenAmount = _tokenAmount.mul(1e12).div(netValue);
+        gameToken.mint(address(msg.sender), gameTokenAmount);
+        uint256 totalGameTokenAmount = banker.gameTokenAmount.add(gameTokenAmount);
+        banker.avgBuyValue = banker.avgBuyValue.mul(banker.gameTokenAmount).div(1e12).add(_tokenAmount).mul(1e12).div(totalGameTokenAmount);
+        banker.gameTokenAmount = totalGameTokenAmount;
         bankerAmount = bankerAmount.add(_tokenAmount);
         emit Deposit(msg.sender, _tokenAmount);    
     }
@@ -618,7 +618,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         if(address(luckyPower) != address(0) && address(oracle) != address(0)){
             BankerInfo storage banker = bankerInfo[_user];
             (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
-            uint256 tokenAmount = banker.diceTokenAmount.mul(netValue).div(1e12);
+            uint256 tokenAmount = banker.gameTokenAmount.mul(netValue).div(1e12);
             uint256 bankerTvl = oracle.getQuantity(WBNB, tokenAmount);
             if(bankerTvl > 0 && fullyWithdrawTh > 0 && totalPower < bankerTvl.mul(fullyWithdrawTh).div(TOTAL_RATE)){
                 // y = - x * maxWithdrawFeeRatio / fullyWithdrawTh + maxWithdrawFeeRatio
@@ -629,14 +629,14 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Withdraw syrup from dice to get token back
-    function withdraw(uint256 _diceTokenAmount) public whenPaused nonReentrant notContract {
+    function withdraw(uint256 _gameTokenAmount) public whenPaused nonReentrant notContract {
         BankerInfo storage banker = bankerInfo[msg.sender];
-        require(_diceTokenAmount > 0 && _diceTokenAmount <= banker.diceTokenAmount, "0 < diceTokenAmount <= banker.diceTokenAmount");
+        require(_gameTokenAmount > 0 && _gameTokenAmount <= banker.gameTokenAmount, "0 < gameTokenAmount <= banker.gameTokenAmount");
         uint256 ratio = getWithdrawFeeRatio(msg.sender);
-        banker.diceTokenAmount = banker.diceTokenAmount.sub(_diceTokenAmount); 
-        SafeBEP20.safeTransferFrom(diceToken, msg.sender, address(this), _diceTokenAmount);
-        diceToken.burn(address(this), _diceTokenAmount);
-        uint256 tokenAmount = _diceTokenAmount.mul(netValue).div(1e12);
+        banker.gameTokenAmount = banker.gameTokenAmount.sub(_gameTokenAmount); 
+        SafeBEP20.safeTransferFrom(gameToken, msg.sender, address(this), _gameTokenAmount);
+        gameToken.burn(address(this), _gameTokenAmount);
+        uint256 tokenAmount = _gameTokenAmount.mul(netValue).div(1e12);
         bankerAmount = bankerAmount.sub(tokenAmount);
 
         if(ratio > 0){
@@ -651,7 +651,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             _safeTransferBNB(address(msg.sender), tokenAmount);
         }
         
-        emit Withdraw(msg.sender, _diceTokenAmount);
+        emit Withdraw(msg.sender, _gameTokenAmount);
     }
 
     // Judge address is contract or not
@@ -663,12 +663,12 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         return size > 0;
     }
 
-    // View function to see banker diceToken Value on frontend.
+    // View function to see banker gameToken Value on frontend.
     function canWithdrawToken(address bankerAddr) external view returns (uint256){
-        return bankerInfo[bankerAddr].diceTokenAmount.mul(netValue).div(1e12);    
+        return bankerInfo[bankerAddr].gameTokenAmount.mul(netValue).div(1e12);    
     }
 
-    // View function to see banker diceToken Value on frontend.
+    // View function to see banker gameToken Value on frontend.
     function canWithdrawAmount(uint256 _amount) external override view returns (uint256){
         return _amount.mul(netValue).div(1e12);    
     }
