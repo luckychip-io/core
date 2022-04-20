@@ -71,7 +71,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     // Funds that are locked in potentially winning bets. Prevents contract from committing to new bets that it cannot pay out.
     uint256 public lockedInBets;
 
-    address public adminAddr;
     address public operationAddr;
     address public treasuryAddr;
     address public lotteryAddr;
@@ -81,11 +80,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     IBEP20 public lcToken;
     GameToken public gameToken;
     IGameRng public gameRng;
-
-    struct BankerInfo {
-        uint256 gameTokenAmount;
-        uint256 avgBuyValue;
-    }
 
     // Info of each bet.
     struct Bet {
@@ -115,10 +109,9 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     address[] public swapRouters;
     mapping(uint256 => uint) public betMap; // Mapping requestId to bet Id.
     mapping(address => uint256[]) public userBets;
-    mapping(address => BankerInfo) public bankerInfo;
+    mapping(address => uint256) public bankerInfo;
 
-    event SetAdmin(address adminAddr, address operationAddr, address treasuryAddr, address lotteryAddr);
-    event SetBlocks(uint256 playerTimeBlocks, uint256 bankerTimeBlocks);
+    event SetAdmin(address operationAddr, address treasuryAddr, address lotteryAddr);
     event SetRates(uint256 gapRate, uint256 operationRate, uint256 treasuryRate, uint256 bonusRate, uint256 lotteryRate);
     event SetAmounts(uint256 maxBankerAmount, uint256 minBetAmount, uint256 offChainFeeAmount, uint256 onChainFeeAmount);
     event SetRatios(uint256 maxWithdrawFeeRatio, uint256 maxBetRatio);
@@ -174,20 +167,14 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         _;
     }
 
-    modifier onlyAdmin() {
-        require(msg.sender == adminAddr, "not admin");
-        _;
-    }
-
     // set blocks
-    function setBlocks(uint256 _playerTimeBlocks, uint256 _bankerTimeBlocks) external onlyAdmin {
+    function setBlocks(uint256 _playerTimeBlocks, uint256 _bankerTimeBlocks) external onlyOwner {
         playerTimeBlocks = _playerTimeBlocks;
         bankerTimeBlocks = _bankerTimeBlocks;
-        emit SetBlocks(playerTimeBlocks, bankerTimeBlocks);
     }
 
     // set rates
-    function setRates(uint256 _gapRate, uint256 _operationRate, uint256 _treasuryRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyAdmin {
+    function setRates(uint256 _gapRate, uint256 _operationRate, uint256 _treasuryRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyOwner {
         require(_gapRate <= 1000 && _operationRate.add(_treasuryRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE, "rate limit");
         gapRate = _gapRate;
         operationRate = _operationRate;
@@ -198,7 +185,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set amounts
-    function setAmounts(uint256 _maxBankerAmount, uint256 _minBetAmount, uint256 _offChainFeeAmount, uint256 _onChainFeeAmount) external onlyAdmin {
+    function setAmounts(uint256 _maxBankerAmount, uint256 _minBetAmount, uint256 _offChainFeeAmount, uint256 _onChainFeeAmount) external onlyOwner {
         maxBankerAmount = _maxBankerAmount;
         minBetAmount = _minBetAmount;
         offChainFeeAmount = _offChainFeeAmount;
@@ -207,25 +194,24 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set ratios
-    function setRatios(uint256 _maxWithdrawFeeRatio, uint256 _maxBetRatio) external onlyAdmin {
+    function setRatios(uint256 _maxWithdrawFeeRatio, uint256 _maxBetRatio) external onlyOwner {
         require(_maxWithdrawFeeRatio <= 100 && _maxBetRatio <= 500, "ratio limit");
         maxWithdrawFeeRatio = _maxWithdrawFeeRatio;
         maxBetRatio = _maxBetRatio;
         emit SetRatios(maxWithdrawFeeRatio, maxBetRatio);
     }
 
-    // set admin address
-    function setAdmin(address _adminAddr, address _operationAddr, address _treasuryAddr, address _lotteryAddr) external onlyOwner {
-        require(_adminAddr != address(0) && _operationAddr != address(0) && _treasuryAddr != address(0) && _lotteryAddr != address(0), "Zero");
-        adminAddr = _adminAddr;
+    // set address
+    function setAdmin(address _operationAddr, address _treasuryAddr, address _lotteryAddr) external onlyOwner {
+        require(_operationAddr != address(0) && _treasuryAddr != address(0) && _lotteryAddr != address(0), "Zero");
         operationAddr = _operationAddr;
         treasuryAddr = _treasuryAddr;
         lotteryAddr = _lotteryAddr;
-        emit SetAdmin(adminAddr, operationAddr, treasuryAddr, lotteryAddr);
+        emit SetAdmin(operationAddr, treasuryAddr, lotteryAddr);
     }
 
     // Update the swap router.
-    function setContract(address _lcTokenAddr, address _oracleAddr, address _luckyPowerAddr, address _gameRngAddr) external onlyAdmin {
+    function setContract(address _lcTokenAddr, address _oracleAddr, address _luckyPowerAddr, address _gameRngAddr) external onlyOwner {
         lcToken = LCToken(_lcTokenAddr);
         oracle = IOracle(_oracleAddr);
         luckyPower = ILuckyPower(_luckyPowerAddr);
@@ -233,13 +219,13 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         emit SetContract(_lcTokenAddr, _oracleAddr, _luckyPowerAddr, _gameRngAddr);
     }
 
-    function setOtherParas(uint256 _fullyWithdrawTh, uint256 _defaultSwapRouterId) external onlyAdmin {
+    function setOtherParas(uint256 _fullyWithdrawTh, uint256 _defaultSwapRouterId) external onlyOwner {
         require(_fullyWithdrawTh <= 5000 && _defaultSwapRouterId < swapRouters.length, "Not valid"); // maximum 50%
         fullyWithdrawTh = _fullyWithdrawTh;
         defaultSwapRouterId = _defaultSwapRouterId;
     }
 
-    function addSwapRouter(address swapRouterAddr) external onlyAdmin {
+    function addSwapRouter(address swapRouterAddr) external onlyOwner {
         require(swapRouterAddr != address(0), "Zero address");
         swapRouters.push(swapRouterAddr);
     }
@@ -249,7 +235,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // End banker time
-    function endBankerTime() external onlyAdmin whenPaused {
+    function endBankerTime() external onlyOwner whenPaused {
         require(bankerAmount > 0, "bankerAmount gt 0");
         prevBankerAmount = bankerAmount;
         _unpause();
@@ -260,7 +246,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // end player time, triggers banker time
-    function endPlayerTime() external onlyAdmin whenNotPaused{
+    function endPlayerTime() external onlyOwner whenNotPaused{
         _pause();
         netValue = netValue.mul(bankerAmount).div(prevBankerAmount);
         emit UpdateNetValue(netValue);
@@ -276,13 +262,13 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
             uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
             if(treasuryAmount > 0){
-                address swapRouterAddr = swapRouters[defaultSwapRouterId];
-                if(swapRouterAddr != address(0)){
+                if(defaultSwapRouterId < swapRouters.length && swapRouters[defaultSwapRouterId] != address(0)){
+                    IRouter swapRouter = IRouter(swapRouters[defaultSwapRouterId]);
                     address[] memory path = new address[](2);
                     path[0] = WBNB;
                     path[1] = address(lcToken);
-                    uint256 amountOut = IRouter(swapRouterAddr).getAmountsOut(treasuryAmount, path)[1];
-                    uint256 lcAmount = IRouter(swapRouterAddr).swapExactETHForTokens{value: treasuryAmount}(amountOut.mul(995).div(1000), path, address(this), block.timestamp + (5 minutes))[1];
+                    uint256 amountOut = swapRouter.getAmountsOut(treasuryAmount, path)[1];
+                    uint256 lcAmount = swapRouter.swapExactETHForTokens{value: treasuryAmount}(amountOut.mul(995).div(1000), path, address(this), block.timestamp + (5 minutes))[1];
                     lcToken.safeTransfer(treasuryAddr, lcAmount);
                 }else{
                     totalOperationAmount = totalOperationAmount.add(treasuryAmount);
@@ -353,8 +339,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     // Place bet
     function placeBet(uint256 betMask, uint256 modulo, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
-        require(modulo > 1 && modulo <= MAX_MODULO, "Modulo not within range");
-        require(betMask > 0 && betMask < MAX_BET_MASK, "Mask not within range");
+        require(modulo > 1 && modulo <= MAX_MODULO && betMask > 0 && betMask < MAX_BET_MASK, "Para error");
 
         // Validate input data.
         uint256 amount;
@@ -362,13 +347,13 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             require(msg.value > onChainFeeAmount, "Wrong para");
             amount = msg.value.sub(onChainFeeAmount);
             if(onChainFeeAmount > 0){
-                _safeTransferBNB(adminAddr, onChainFeeAmount);
+                _safeTransferBNB(owner(), onChainFeeAmount);
             }
         }else{
             require(msg.value > offChainFeeAmount, "Wrong para");
             amount = msg.value.sub(offChainFeeAmount);
             if(offChainFeeAmount > 0){
-                _safeTransferBNB(adminAddr, offChainFeeAmount);
+                _safeTransferBNB(owner(), offChainFeeAmount);
             }
         }
         require(amount >= minBetAmount, "Bet amount not within range");
@@ -430,31 +415,31 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     // swap and place bet
     function swapAndBet(address tokenAddr, uint256 tokenAmount, uint256 swapRounterId, uint256 slippage, uint256 betMask, uint256 modulo, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
-        require(modulo > 1 && modulo <= MAX_MODULO, "Modulo not within range");
-        require(betMask > 0 && betMask < MAX_BET_MASK, "Mask not within range");
-        require(swapRounterId < swapRouters.length, "swapRouter not exist");
+        require(modulo > 1 && modulo <= MAX_MODULO && betMask > 0 && betMask < MAX_BET_MASK && swapRounterId < swapRouters.length, "Para error");
         
         uint256 amount;
         {
+            IBEP20(tokenAddr).safeTransferFrom(address(msg.sender), address(this), tokenAmount);
             address[] memory path = new address[](2);
             path[0] = tokenAddr;
             path[1] = WBNB;
             IRouter swapRouter = IRouter(swapRouters[swapRounterId]);
             uint256 amountOut = swapRouter.getAmountsOut(tokenAmount, path)[1];
+            IBEP20(tokenAddr).safeApprove(address(swapRouter), tokenAmount);
             amount = swapRouter.swapExactTokensForETH(tokenAmount, amountOut.mul(TOTAL_RATE).div(TOTAL_RATE.add(slippage)), path, address(this), block.timestamp + (5 minutes))[1];
         }
         require(amount >= minBetAmount, "Bet amount not within range");
 
         // Validate input data.
         if(rngOnChain){
-            require(msg.value > onChainFeeAmount, "Wrong para");
+            require(msg.value >= onChainFeeAmount, "Wrong para");
             if(onChainFeeAmount > 0){
-                _safeTransferBNB(adminAddr, onChainFeeAmount);
+                _safeTransferBNB(owner(), onChainFeeAmount);
             }
         }else{
-            require(msg.value > offChainFeeAmount, "Wrong para");
+            require(msg.value >= offChainFeeAmount, "Wrong para");
             if(offChainFeeAmount > 0){
-                _safeTransferBNB(adminAddr, offChainFeeAmount);
+                _safeTransferBNB(owner(), offChainFeeAmount);
             }
         }
 
@@ -520,55 +505,55 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         Bet storage bet = bets[betId];
         uint256 amount = bet.amount;
 
-        require(amount > 0 && bet.isSettled == false, "Not Valid");
+        if(amount > 0 && bet.isSettled == false){
+            uint256 modulo = bet.modulo;
+            uint256 rollUnder = bet.rollUnder;
 
-        uint256 modulo = bet.modulo;
-        uint256 rollUnder = bet.rollUnder;
+            // Do a roll by taking a modulo of random number.
+            uint256 outcome = randomNumber % modulo;
 
-        // Do a roll by taking a modulo of random number.
-        uint256 outcome = randomNumber % modulo;
+            // Win amount if gambler wins this bet
+            uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
 
-        // Win amount if gambler wins this bet
-        uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
+            // Actual win amount by gambler.
+            uint256 winAmount = 0;
 
-        // Actual win amount by gambler.
-        uint256 winAmount = 0;
-
-        // Determine dice outcome.
-        if (modulo <= MAX_MASK_MODULO) {
-            // For small modulo games, check the outcome against a bit mask.
-            if ((2 ** outcome) & bet.mask != 0) {
-                winAmount = possibleWinAmount;
+            // Determine dice outcome.
+            if (modulo <= MAX_MASK_MODULO) {
+                // For small modulo games, check the outcome against a bit mask.
+                if ((2 ** outcome) & bet.mask != 0) {
+                    winAmount = possibleWinAmount;
+                }
+            } else {
+                // For larger modulos, check inclusion into half-open interval.
+                if (outcome < rollUnder) {
+                    winAmount = possibleWinAmount;
+                }
             }
-        } else {
-            // For larger modulos, check inclusion into half-open interval.
-            if (outcome < rollUnder) {
-                winAmount = possibleWinAmount;
+
+            uint256 tmpBankerAmount = bankerAmount;
+            tmpBankerAmount = tmpBankerAmount.add(amount);
+            if(winAmount > 0){
+                tmpBankerAmount = tmpBankerAmount.sub(winAmount);
+                _safeTransferBNB(bet.gambler, winAmount);
             }
+
+            // Unlock possibleWinAmount from lockedInBets, regardless of the outcome.
+            lockedInBets -= possibleWinAmount;
+
+            betAmount = betAmount.add(amount);
+
+            uint256 gapAmount = amount.mul(gapRate).div(TOTAL_RATE);
+            tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
+
+            bankerAmount = tmpBankerAmount;
+            bet.outcome = outcome;
+            bet.winAmount = winAmount;
+            bet.isSettled = true;
+            
+            // Record bet settlement in event log.
+            emit BetSettled(betId, bet.gambler, amount, uint8(modulo), uint8(rollUnder), bet.mask, outcome, winAmount);
         }
-
-        uint256 tmpBankerAmount = bankerAmount;
-        tmpBankerAmount = tmpBankerAmount.add(amount);
-        if(winAmount > 0){
-            tmpBankerAmount = tmpBankerAmount.sub(winAmount);
-            _safeTransferBNB(bet.gambler, winAmount);
-        }
-
-        // Unlock possibleWinAmount from lockedInBets, regardless of the outcome.
-        lockedInBets -= possibleWinAmount;
-
-        betAmount = betAmount.add(amount);
-
-        uint256 gapAmount = amount.mul(gapRate).div(TOTAL_RATE);
-        tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
-
-        bankerAmount = tmpBankerAmount;
-        bet.outcome = outcome;
-        bet.winAmount = winAmount;
-        bet.isSettled = true;
-        
-        // Record bet settlement in event log.
-        emit BetSettled(betId, bet.gambler, amount, uint8(modulo), uint8(rollUnder), bet.mask, outcome, winAmount);
     }
 
     // Return the bet in the very unlikely scenario it was not settled by Chainlink VRF. 
@@ -601,14 +586,12 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     // Deposit token to Dice as a banker, get Syrup back.
     function deposit() public payable whenPaused nonReentrant notContract {
         uint256 _tokenAmount = msg.value;
-        require(_tokenAmount > 0, "Amount > 0");
-        require(bankerAmount.add(_tokenAmount) < maxBankerAmount, 'maxBankerAmount Limit');
-        BankerInfo storage banker = bankerInfo[msg.sender];
+        require(_tokenAmount > 0 && bankerAmount.add(_tokenAmount) < maxBankerAmount, 'Amount Limit');
+        uint256 prevGameTokenAmount = bankerInfo[msg.sender];
         uint256 gameTokenAmount = _tokenAmount.mul(1e12).div(netValue);
         gameToken.mint(address(msg.sender), gameTokenAmount);
-        uint256 totalGameTokenAmount = banker.gameTokenAmount.add(gameTokenAmount);
-        banker.avgBuyValue = banker.avgBuyValue.mul(banker.gameTokenAmount).div(1e12).add(_tokenAmount).mul(1e12).div(totalGameTokenAmount);
-        banker.gameTokenAmount = totalGameTokenAmount;
+        uint256 totalGameTokenAmount = prevGameTokenAmount.add(gameTokenAmount);
+        bankerInfo[msg.sender] = totalGameTokenAmount;
         bankerAmount = bankerAmount.add(_tokenAmount);
         emit Deposit(msg.sender, _tokenAmount);    
     }
@@ -616,9 +599,9 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     function getWithdrawFeeRatio(address _user) public view returns (uint256 ratio){
         ratio = 0;
         if(address(luckyPower) != address(0) && address(oracle) != address(0)){
-            BankerInfo storage banker = bankerInfo[_user];
+            uint256 gameTokenAmount = bankerInfo[msg.sender];
             (uint256 totalPower,,,,,) = luckyPower.pendingPower(_user);
-            uint256 tokenAmount = banker.gameTokenAmount.mul(netValue).div(1e12);
+            uint256 tokenAmount = gameTokenAmount.mul(netValue).div(1e12);
             uint256 bankerTvl = oracle.getQuantity(WBNB, tokenAmount);
             if(bankerTvl > 0 && fullyWithdrawTh > 0 && totalPower < bankerTvl.mul(fullyWithdrawTh).div(TOTAL_RATE)){
                 // y = - x * maxWithdrawFeeRatio / fullyWithdrawTh + maxWithdrawFeeRatio
@@ -630,10 +613,10 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     // Withdraw syrup from dice to get token back
     function withdraw(uint256 _gameTokenAmount) public whenPaused nonReentrant notContract {
-        BankerInfo storage banker = bankerInfo[msg.sender];
-        require(_gameTokenAmount > 0 && _gameTokenAmount <= banker.gameTokenAmount, "0 < gameTokenAmount <= banker.gameTokenAmount");
+        uint256 prevGameTokenAmount = bankerInfo[msg.sender];
+        require(_gameTokenAmount > 0 && _gameTokenAmount <= prevGameTokenAmount, "0 < gameTokenAmount <= prevGameTokenAmount");
         uint256 ratio = getWithdrawFeeRatio(msg.sender);
-        banker.gameTokenAmount = banker.gameTokenAmount.sub(_gameTokenAmount); 
+        bankerInfo[msg.sender] = prevGameTokenAmount.sub(_gameTokenAmount); 
         SafeBEP20.safeTransferFrom(gameToken, msg.sender, address(this), _gameTokenAmount);
         gameToken.burn(address(this), _gameTokenAmount);
         uint256 tokenAmount = _gameTokenAmount.mul(netValue).div(1e12);
@@ -665,7 +648,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     // View function to see banker gameToken Value on frontend.
     function canWithdrawToken(address bankerAddr) external view returns (uint256){
-        return bankerInfo[bankerAddr].gameTokenAmount.mul(netValue).div(1e12);    
+        return bankerInfo[bankerAddr].mul(netValue).div(1e12);
     }
 
     // View function to see banker gameToken Value on frontend.
@@ -681,5 +664,4 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     function tokenAddr() public override view returns (address){
         return WBNB;
     }
-
 }
