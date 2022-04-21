@@ -220,7 +220,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     function setOtherParas(uint256 _fullyWithdrawTh, uint256 _defaultSwapRouterId) external onlyOwner {
-        require(_fullyWithdrawTh <= 5000 && _defaultSwapRouterId < swapRouters.length, "Not valid"); // maximum 50%
+        require(_fullyWithdrawTh <= 5000, "Not valid"); // maximum 50%
         fullyWithdrawTh = _fullyWithdrawTh;
         defaultSwapRouterId = _defaultSwapRouterId;
     }
