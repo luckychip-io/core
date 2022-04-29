@@ -378,7 +378,7 @@ contract LuckyGame is IGame, Ownable, ReentrancyGuard, Pausable {
         uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
 
         // Enforce max profit limit. Bet will not be placed if condition is not met. Also check whether contract has enough funds to accept this bet.
-        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= address(this).balance, "maxProfit violation");
+        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= bankerAmount, "maxProfit violation");
 
         // Update lock funds.
         lockedInBets += possibleWinAmount;
@@ -463,7 +463,7 @@ contract LuckyGame is IGame, Ownable, ReentrancyGuard, Pausable {
         uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
 
         // Enforce max profit limit. Bet will not be placed if condition is not met. Also check whether contract has enough funds to accept this bet.
-        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= address(this).balance, "maxProfit violation");
+        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= bankerAmount, "maxProfit violation");
 
         // Update lock funds.
         lockedInBets += possibleWinAmount;
