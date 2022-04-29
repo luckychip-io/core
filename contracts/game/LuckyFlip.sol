@@ -301,7 +301,7 @@ contract LuckyFlip is IDice, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Place bet
-    function placePrivateBet( uint256 amount, bool betHead, bool betTail, address _referrer) external payable whenNotPaused nonReentrant notContract {
+    function placePrivateBet(uint256 amount, bool betHead, bool betTail, address _referrer) external payable whenNotPaused nonReentrant notContract {
         require(betHead || betTail, "At least one side");
 
         // Validate input data.
@@ -312,8 +312,9 @@ contract LuckyFlip is IDice, Ownable, ReentrancyGuard, Pausable {
 
         // Check whether contract has enough funds to accept this bet.
         if(privateFeeAmount > 0){
-            _safeTransferBNB(adminAddr, msg.value);
+            _safeTransferBNB(adminAddr, privateFeeAmount);
         }
+        token.safeTransferFrom(address(msg.sender), address(this), amount);
 
         uint256 requestId = flipRng.getPrivateRandomNumber(bets.length);
         betMap[requestId] = bets.length;
