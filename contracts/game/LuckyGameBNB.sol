@@ -68,8 +68,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     uint256 public maxWithdrawFeeRatio = 20; // 0.2% for withdrawFee
     uint256 public fullyWithdrawTh = 1000; //the threshold to judge whether a user can withdraw fully, default 10%
     uint256 public defaultSwapRouterId = 0; // 0 for pancakeswap, 1 for biswap, 2 for apeswap, 3 for babyswap
-    // Funds that are locked in potentially winning bets. Prevents contract from committing to new bets that it cannot pay out.
-    uint256 public lockedInBets;
 
     address public operationAddr;
     address public treasuryAddr;
@@ -356,7 +354,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 _safeTransferBNB(owner(), offChainFeeAmount);
             }
         }
-        require(amount >= minBetAmount, "Bet amount not within range");
 
         uint256 rollUnder;
         uint256 mask;
@@ -374,14 +371,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             rollUnder = betMask;
         }
 
-        // Winning amount.
-        uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
-
-        // Enforce max profit limit. Bet will not be placed if condition is not met. Also check whether contract has enough funds to accept this bet.
-        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= address(this).balance, "maxProfit violation");
-
-        // Update lock funds.
-        lockedInBets += possibleWinAmount;
+        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).mul(rollUnder).div(modulo), "Range limit");
 
         uint256 requestId;
         if(rngOnChain){
@@ -428,7 +418,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             IBEP20(tokenAddr).safeApprove(address(swapRouter), tokenAmount);
             amount = swapRouter.swapExactTokensForETH(tokenAmount, amountOut.mul(TOTAL_RATE).div(TOTAL_RATE.add(slippage)), path, address(this), block.timestamp + (5 minutes))[1];
         }
-        require(amount >= minBetAmount, "Bet amount not within range");
 
         // Validate input data.
         if(rngOnChain){
@@ -459,14 +448,7 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             rollUnder = betMask;
         }
 
-        // Winning amount.
-        uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
-
-        // Enforce max profit limit. Bet will not be placed if condition is not met. Also check whether contract has enough funds to accept this bet.
-        require(possibleWinAmount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).add(amount) && lockedInBets + possibleWinAmount <= address(this).balance, "maxProfit violation");
-
-        // Update lock funds.
-        lockedInBets += possibleWinAmount;
+        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).mul(rollUnder).div(modulo), "Range limit");
 
         uint256 requestId;
         if(rngOnChain){
@@ -538,9 +520,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 _safeTransferBNB(bet.gambler, winAmount);
             }
 
-            // Unlock possibleWinAmount from lockedInBets, regardless of the outcome.
-            lockedInBets -= possibleWinAmount;
-
             betAmount = betAmount.add(amount);
 
             uint256 gapAmount = amount.mul(gapRate).div(TOTAL_RATE);
@@ -566,11 +545,6 @@ contract LuckyGameBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
         // Validation checks
         require(amount > 0 && bet.isSettled == false && block.number > bet.blockNumber + playerTimeBlocks, "No refundable");
-
-        uint256 possibleWinAmount = getWinAmount(amount, bet.modulo, bet.rollUnder);
-
-        // Unlock possibleWinAmount from lockedInBets, regardless of the outcome.
-        lockedInBets -= possibleWinAmount;
 
         // Update bet records
         bet.isSettled = true;
