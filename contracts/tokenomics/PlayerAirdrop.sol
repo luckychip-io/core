@@ -8,10 +8,7 @@ import "../libraries/SafeBEP20.sol";
 import "../interfaces/IBEP20.sol";
 import "../libraries/SafeBEP20.sol";
 import "./AuthValidator.sol";
-
-interface ILuckyDice {
-    function getUserPrivateBetLength(address user) external view returns (uint256);
-}
+import "../game/LuckyGameBNB.sol";
 
 /**
  * @title LuckyChip Airdrop For Player
@@ -27,11 +24,10 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
     uint256 public endTimestamp;
 
     uint256 public constant TOTAL_PERCENT = 10000;
-    uint256 public flipPercent = 3000;
-    uint256 public dicePercent = 7000;
+    uint256 public flipPercent = 2500;
+    uint256 public dicePercent = 7500;
 
-    ILuckyDice public bnbFlip;
-    ILuckyDice public bnbDice;
+    LuckyGameBNB public bnbGame;
     AuthValidator public authValidator;
 
     mapping(address => bool) public hasClaimedFlip;
@@ -53,8 +49,7 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
         uint256 _maximumAmountToClaim,
         uint256 _singleAmount,
         address _lcToken,
-        address _bnbFlipAddr,
-        address _bnbDiceAddr, 
+        address payable _bnbGameAddr, 
         address _authValidatorAddr
     ) public {
         endTimestamp = _endTimestamp;
@@ -63,8 +58,7 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
 
         lcToken = IBEP20(_lcToken);
 
-        bnbFlip = ILuckyDice(_bnbFlipAddr);
-        bnbDice = ILuckyDice(_bnbDiceAddr);
+        bnbGame = LuckyGameBNB(_bnbGameAddr);
         authValidator = AuthValidator(_authValidatorAddr);
     }
 
@@ -82,11 +76,12 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
         // Set as claimed
         uint256 totalAmount = 0;
         uint256 amount = singleAmount;
-        if(address(bnbFlip) != address(0) && bnbFlip.getUserPrivateBetLength(msg.sender) > 0 && !hasClaimedFlip[msg.sender]){
+        (bool flipPlayed, bool dicePlayed) = isDicePlayed(msg.sender);
+        if(flipPlayed && !hasClaimedFlip[msg.sender]) {
             totalAmount += amount * flipPercent / TOTAL_PERCENT;
             hasClaimedFlip[msg.sender] = true;
         }
-        if(address(bnbDice) != address(0) && bnbDice.getUserPrivateBetLength(msg.sender) > 0 && !hasClaimedDice[msg.sender]){
+        if(dicePlayed && !hasClaimedDice[msg.sender]){
             totalAmount += amount * dicePercent / TOTAL_PERCENT;
             hasClaimedDice[msg.sender] = true;
         }
@@ -114,10 +109,11 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
         if (block.timestamp <= endTimestamp) {
             uint256 totalAmount = 0;
             uint256 amount = singleAmount;
-            if(address(bnbFlip) != address(0) && bnbFlip.getUserPrivateBetLength(user) > 0 && !hasClaimedFlip[user]){
+            (bool flipPlayed, bool dicePlayed) = isDicePlayed(user);
+            if(flipPlayed && !hasClaimedFlip[user]) {
                 totalAmount += amount * flipPercent / TOTAL_PERCENT;
             }
-            if(address(bnbDice) != address(0) && bnbDice.getUserPrivateBetLength(user) > 0 && !hasClaimedDice[user]){
+            if(dicePlayed && !hasClaimedDice[user]){
                 totalAmount += amount * dicePercent / TOTAL_PERCENT;
             }
             return totalAmount;
@@ -136,10 +132,9 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
         authValidator = AuthValidator(_authValidatorAddr);
     }
 
-    function setDice(address _bnbFlipAddr, address _bnbDiceAddr) external onlyOwner{
-        require(_bnbFlipAddr != address(0) && _bnbDiceAddr != address(0), "Zero");
-        bnbFlip = ILuckyDice(_bnbFlipAddr);
-        bnbDice = ILuckyDice(_bnbDiceAddr);
+    function setGame(address payable _bnbGameAddr) external onlyOwner{
+        require(_bnbGameAddr != address(0), "Zero");
+        bnbGame = LuckyGameBNB(_bnbGameAddr);
     }
 
     function setPercent(uint256 _flipPercent, uint256 _dicePercent) external onlyOwner{
@@ -149,11 +144,40 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
     }
 
     function isDicePlayed(address user) public view returns (bool flipPlayed, bool dicePlayed) {
-        if(address(bnbFlip) != address(0) && bnbFlip.getUserPrivateBetLength(user) > 0){
-            flipPlayed = true;
-        }
-        if(address(bnbDice) != address(0) && bnbDice.getUserPrivateBetLength(user) > 0){
-            dicePlayed = true;
+        if(address(bnbGame) != address(0)){
+            uint256 userBetLength = bnbGame.getUserBetLength(user);
+            if(userBetLength > 0){
+                uint8 modulo = 0;
+                uint256 outcome = 0;
+                for(uint256 i = userBetLength - 1; i > 0; i --){
+                    (,,,outcome,,,modulo,,) = bnbGame.bets(i);
+                    if(!flipPlayed){
+                        if(modulo == 2 && outcome == 1){
+                            flipPlayed = true;
+                        }
+                    }
+                    if(!dicePlayed){
+                        if(modulo == 6 && outcome == 5){
+                            dicePlayed = true;
+                        }
+                    }
+
+                    if(flipPlayed && dicePlayed){
+                        break;
+                    }
+                }
+                (,,,outcome,,,modulo,,) = bnbGame.bets(0);
+                if(!flipPlayed){
+                    if(modulo == 2 && outcome == 1){
+                        flipPlayed = true;
+                    }
+                }
+                if(!dicePlayed){
+                    if(modulo == 6 && outcome == 5){
+                        dicePlayed = true;
+                    }
+                }
+            }
         }
     }
 
