@@ -149,8 +149,9 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
             if(userBetLength > 0){
                 uint8 modulo = 0;
                 uint256 outcome = 0;
+                (,uint256[] memory userBets) = bnbGame.getUserBets(user, 0, userBetLength);
                 for(uint256 i = userBetLength - 1; i > 0; i --){
-                    (,,,outcome,,,modulo,,) = bnbGame.bets(i);
+                    (,,,outcome,,,modulo,,) = bnbGame.bets(userBets[i]);
                     if(!flipPlayed){
                         if(modulo == 2 && outcome == 1){
                             flipPlayed = true;
@@ -166,7 +167,7 @@ contract PlayerAirdrop is Pausable, ReentrancyGuard, Ownable {
                         break;
                     }
                 }
-                (,,,outcome,,,modulo,,) = bnbGame.bets(0);
+                (,,,outcome,,,modulo,,) = bnbGame.bets(userBets[0]);
                 if(!flipPlayed){
                     if(modulo == 2 && outcome == 1){
                         flipPlayed = true;
