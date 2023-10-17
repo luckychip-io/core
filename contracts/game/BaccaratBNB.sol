@@ -27,10 +27,11 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     uint256 public playerEndBlock;
     uint256 public bankerEndBlock;
     uint256 public betAmount;
+    uint256 public gapAmount;
     uint256 public playerTimeBlocks;
     uint256 public bankerTimeBlocks;
     uint256 public constant TOTAL_RATE = 10000; // 100%
-    uint256 public gapRate = 300;// Gap rate, default 3%
+    uint256 public gapRate = 500;// Gap rate when banker wins, default 5%
     uint256 public operationRate = 500; // 5% in gap
     uint256 public treasuryRate = 500; // 5% in gap
     uint256 public bonusRate = 2000; // 20% in gap
@@ -99,7 +100,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     event BetPlaced(uint256 indexed betId, address indexed gambler, uint256[5] amounts, bool rngOnChain);
     event SwapBetPlaced(uint256 indexed betId, address indexed gambler, address tokenAddr, uint256[5] tokenAmounts, uint256[5] amounts, bool rngOnChain);
     event BetSettled(uint256 indexed betId, address indexed gambler, uint256[5] amounts, uint256 winAmount, uint8[3] bankerCards, uint8[3] playerCards, uint8[2] finalPoints, uint8[2] pokerNums, bool rngOnChain);
-    event BetRefunded(uint256 indexed betId, address indexed gambler, uint256[5] amounts);
+    event BetRefunded(uint256 indexed betId, address indexed gambler, uint256[5] amounts, uint256 amount);
 
     constructor(
         address _WBNBAddr,
@@ -230,8 +231,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     // Claim all bonus to LuckyPower
     function _claimBonusAndLottery() internal {
-        if(betAmount > 0){
-            uint256 gapAmount = betAmount.mul(gapRate).div(TOTAL_RATE);
+        if(gapAmount > 0){
             uint256 totalOperationAmount = 0;
 
             uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
@@ -271,7 +271,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 _safeTransferBNB(lotteryAddr, lotteryAmount);
             }
 
-            betAmount = 0;
+            gapAmount = 0;
         }
     }
 
@@ -304,50 +304,27 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         return bets.length;
     }
 
-    // Returns the expected win amount.
-    function getWinAmount(uint256 amount, uint256 modulo, uint256 rollUnder) private view returns (uint256 winAmount) {
-        require(0 < rollUnder && rollUnder <= modulo, "Win probability out of range");
-        uint256 houseEdgeFee = amount.mul(gapRate).div(TOTAL_RATE);
-        winAmount = amount.sub(houseEdgeFee).mul(modulo).div(rollUnder);
-    }
-
     // Place bet
-    function placeBet(uint256 betMask, uint256 modulo, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
-        require(modulo > 1 && modulo <= MAX_MODULO && betMask > 0 && betMask < MAX_BET_MASK, "Para error");
-
+    function placeBet(uint256[5] amounts, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
         // Validate input data.
         uint256 amount;
+        for(uint256 i = 0; i < 5; i ++){
+            amount = amount.add(amounts[i]);
+        }
+        
         if(rngOnChain){
-            require(msg.value > onChainFeeAmount, "Wrong para");
-            amount = msg.value.sub(onChainFeeAmount);
+            require(msg.value >= amount.add(onChainFeeAmount), "Wrong para");
             if(onChainFeeAmount > 0){
                 _safeTransferBNB(owner(), onChainFeeAmount);
             }
         }else{
-            require(msg.value > offChainFeeAmount, "Wrong para");
-            amount = msg.value.sub(offChainFeeAmount);
+            require(msg.value >= amount.add(offChainFeeAmount), "Wrong para");
             if(offChainFeeAmount > 0){
                 _safeTransferBNB(owner(), offChainFeeAmount);
             }
         }
 
-        uint256 rollUnder;
-        uint256 mask;
-
-        if (modulo <= MAX_MASK_MODULO) {
-            // Small modulo games can specify exact bet outcomes via bit mask.
-            // rollUnder is a number of 1 bits in this mask (population count).
-            // This magic looking formula is an efficient way to compute population
-            // count on EVM for numbers below 2**40. 
-            rollUnder = ((betMask * POPCNT_MULT) & POPCNT_MASK) % POPCNT_MODULO;
-            mask = betMask;
-        } else {
-            // Larger modulos games specify the right edge of half-open interval of winning bet outcomes.
-            require(betMask > 0 && betMask <= modulo, "betMask larger than modulo");
-            rollUnder = betMask;
-        }
-
-        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).mul(rollUnder).div(modulo), "Range limit");
+        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE), "Range limit");
 
         uint256 requestId;
         if(rngOnChain){
@@ -360,30 +337,35 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         userBets[msg.sender].push(bets.length);
 
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
-        emit BetPlaced(bets.length, msg.sender, amount, uint8(modulo), uint8(rollUnder), uint40(mask), rngOnChain);
+        emit BetPlaced(bets.length, msg.sender, amounts, rngOnChain);
 
         // Store bet in bet list.
         bets.push(Bet(
             {
                 gambler: msg.sender,
                 blockNumber: block.number,
-                amount: amount,
-                outcome: 0,
+                amounts: amounts,
                 winAmount: 0,
-                mask: uint40(mask),
-                modulo: uint8(modulo),
-                rollUnder: uint8(rollUnder),
+                bankerCards: new uint8[](3),
+                playerCards: new uint8[](3),
+                finalPoints: new uint8[](2),
+                pokerNums: new uint8[](2),
+                rngOnChain: rngOnChain,
                 isSettled: false
             }
         ));
-
     }
 
     // swap and place bet
-    function swapAndBet(address tokenAddr, uint256 tokenAmount, uint256 swapRounterId, uint256 slippage, uint256 betMask, uint256 modulo, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
-        require(modulo > 1 && modulo <= MAX_MODULO && betMask > 0 && betMask < MAX_BET_MASK && swapRounterId < swapRouters.length, "Para error");
+    function swapAndBet(address tokenAddr, uint256[5] tokenAmounts, uint256 swapRounterId, uint256 slippage, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
+        require(swapRounterId < swapRouters.length, "Para error");
         
         uint256 amount;
+        uint256 tokenAmount;
+        for(uint256 i = 0; i < 5; i ++){
+            tokenAmount = tokenAmount.add(tokenAmounts[i]);
+        }
+
         {
             IBEP20(tokenAddr).safeTransferFrom(address(msg.sender), address(this), tokenAmount);
             address[] memory path = new address[](2);
@@ -408,23 +390,11 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        uint256 rollUnder;
-        uint256 mask;
-
-        if (modulo <= MAX_MASK_MODULO) {
-            // Small modulo games can specify exact bet outcomes via bit mask.
-            // rollUnder is a number of 1 bits in this mask (population count).
-            // This magic looking formula is an efficient way to compute population
-            // count on EVM for numbers below 2**40. 
-            rollUnder = ((betMask * POPCNT_MULT) & POPCNT_MASK) % POPCNT_MODULO;
-            mask = betMask;
-        } else {
-            // Larger modulos games specify the right edge of half-open interval of winning bet outcomes.
-            require(betMask > 0 && betMask <= modulo, "betMask larger than modulo");
-            rollUnder = betMask;
+        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE), "Range limit");
+        uint256[5] memory amounts = new uint256[](5);
+        for(uint256 i = 0; i < 5; i ++){
+            amounts[i] = amount.mul(tokenAmounts[i]).div(tokenAmount);
         }
-
-        require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE).mul(rollUnder).div(modulo), "Range limit");
 
         uint256 requestId;
         if(rngOnChain){
@@ -437,22 +407,28 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         userBets[msg.sender].push(bets.length);
 
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
-        emit SwapBetPlaced(bets.length, msg.sender, tokenAddr, tokenAmount, amount, uint8(modulo), uint8(rollUnder), uint40(mask), rngOnChain);
+        emit SwapBetPlaced(bets.length, msg.sender, tokenAddr, tokenAmounts, amounts, rngOnChain);
 
         // Store bet in bet list.
         bets.push(Bet(
             {
                 gambler: msg.sender,
                 blockNumber: block.number,
-                amount: amount,
-                outcome: 0,
+                amounts: amounts,
                 winAmount: 0,
-                mask: uint40(mask),
-                modulo: uint8(modulo),
-                rollUnder: uint8(rollUnder),
+                bankerCards: new uint8[](3),
+                playerCards: new uint8[](3),
+                finalPoints: new uint8[](2),
+                pokerNums: new uint8[](2),
+                rngOnChain: rngOnChain,
                 isSettled: false
             }
         ));
+    }
+
+    // Get different digits of random number
+    function getNumberDigit(uint number, uint start, uint long) public returns (uint) {
+        return (number / (10 ** start)) % (10 ** long);
     }
 
     // Settle bet. Function can only be called by fulfillRandomness function, which in turn can only be called by Chainlink VRF.
@@ -461,32 +437,115 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
         uint256 betId = betMap[requestId];
         Bet storage bet = bets[betId];
-        uint256 amount = bet.amount;
+        uint256 amount;
+        for(uint256 i = 0; i < 5; i ++){
+            amount = amount.add(bet.amounts[i]);
+        }
 
         if(amount > 0 && bet.isSettled == false){
-            uint256 modulo = bet.modulo;
-            uint256 rollUnder = bet.rollUnder;
+            randomNumber = randomNumber ^ (uint256(keccak256(abi.encode(block.timestamp, block.difficulty))) % 1000000000000000000);
 
-            // Do a roll by taking a modulo of random number.
-            uint256 outcome = randomNumber % modulo;
+            // Cards of banker
+            uint8[3] memory bankerCards = new uint8[](3);
+            // Cards of player
+            uint8[3] memory playerCards = new uint8[](3);
+            
+            for (uint i = 0; i < 6; i++)
+            {
+                if(i < 3){
+                    playerCards[i] = getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8);
+                }else{
+                    bankerCards[i - 3] = getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8);
+                }
+            }
 
-            // Win amount if gambler wins this bet
-            uint256 possibleWinAmount = getWinAmount(amount, modulo, rollUnder);
+            // Final poionts [bankerPoint, playerPoint]
+            uint8[2] memory finalPoints = new uint8[](3);
+            // Poker nums of banker and player [bankerPokerNum, playerPokerNum]
+            uint8[2] memory pokerNums = [2, 2];
+
+            // A ~ K  1 ~ 13
+            uint256 playerCard0 = (playerCards[0] % 13 + 1) >= 10 ? 0 : (playerCards[0] % 13 + 1);
+            uint256 playerCard1 = (playerCards[1] % 13 + 1) >= 10 ? 0 : (playerCards[1] % 13 + 1);
+            uint256 playerCard2 = (playerCards[2] % 13 + 1) >= 10 ? 0 : (playerCards[2] % 13 + 1);
+
+            uint256 bankerCard0 = (bankerCards[0] % 13 + 1) >= 10 ? 0 : (bankerCards[0] % 13 + 1);
+            uint256 bankerCard1 = (bankerCards[1] % 13 + 1) >= 10 ? 0 : (bankerCards[1] % 13 + 1);
+            uint256 bankerCard2 = (bankerCards[2] % 13 + 1) >= 10 ? 0 : (bankerCards[2] % 13 + 1);
+
+            uint256 playerTwoCardPoint = (playerCard0 + playerCard1) % 10;
+            uint256 bankerTwoCardPoint = (bankerCard0 + bankerCard1) % 10;
+            uint256 playerThreeCardPoint = (playerCard0 + playerCard1 + playerCard2) % 10;
+            uint256 bankerThreeCardPoint = (bankerCard0 + bankerCard1 + bankerCard2) % 10;
+
+            uint256 playerFinalPoint = 0;
+            uint256 bankerFinalPoint = 0;
+
+            // Drawing rules
+            if (playerTwoCardPoint < 6 && bankerTwoCardPoint < 8) {// Player need to draw a third card
+                playerFinalPoint = playerThreeCardPoint;
+                pokerNums[0] = 3;
+            } else {
+                playerFinalPoint = playerTwoCardPoint;
+                pokerNums[0] = 2;
+            }
+
+            if (bankerTwoCardPoint < 7 && playerTwoCardPoint < 8) {// Banker need to draw a third card
+                if (bankerTwoCardPoint < 3) {
+                    bankerFinalPoint = bankerThreeCardPoint;
+                    pokerNums[1] = 3;
+                } else {
+                    if (firstTurnPlayer < 6) {// Player has draw a third card
+                        if (bankerTwoCardPoint == 3 && playerCard2 != 8) {
+                            bankerFinalPoint = bankerThreeCardPoint;
+                            pokerNums[1] = 3;
+                        } else if (bankerTwoCardPoint == 4 && playerCard2 > 1 && playerCard2 < 8) {
+                            bankerFinalPoint = bankerThreeCardPoint;
+                            pokerNums[1] = 3;
+                        } else if (bankerTwoCardPoint == 5 && playerCard2 > 3 && playerCard2 < 8) {
+                            bankerFinalPoint = bankerThreeCardPoint;
+                            pokerNums[1] = 3;
+                        } else if (bankerTwoCardPoint == 6 && playerCard2 > 5 && playerCard2 < 8) {
+                            bankerFinalPoint = bankerThreeCardPoint;
+                            pokerNums[1] = 3;
+                        } else {
+                            bankerFinalPoint = bankerTwoCardPoint;
+                            pokerNums[1] = 2;
+                        }
+                    } else {// Player hasn't draw a third card
+                        if (bankerTwoCardPoint < 6) {
+                            bankerFinalPoint = bankerThreeCardPoint;
+                            pokerNums[1] = 3;
+                        } else {
+                            bankerFinalPoint = bankerTwoCardPoint;
+                            pokerNums[1] = 2;
+                        }
+                    }
+                }
+            } else {
+                bankerFinalPoint = bankerTwoCardPoint;
+                pokerNums[1] = 2;
+            }
+
+            finalPoint = [playerFinalPoint, bankerFinalPoint];
 
             // Actual win amount by gambler.
             uint256 winAmount = 0;
+            uint256 tmpGapAmount = 0;
+            uint256 tmpWinAmount = 0;
+            if(bankerFinalPoint > playerFinalPoint){
+                if(bet.amounts[0] > 0){
+                    tmpWinAmount = bet.amounts[0].mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE);
+                    tmpGapAmount = bet.amounts[0].mul(gapRate).div(TOTAL_RATE);
+                    winAmount = winAmount.add(bet.amounts[0]).add(tmpWinAmount);
+                }
+            }else if(bankerFinalPoint < playerFinalPoint){
+                if(bet.amounts[1] > 0){
+                    tmpWinAmount = bet.amounts[1].mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE);
+                    winAmount = winAmount.add(bet.amounts[0]).add(tmpWinAmount);
+                }
+            }else{
 
-            // Determine dice outcome.
-            if (modulo <= MAX_MASK_MODULO) {
-                // For small modulo games, check the outcome against a bit mask.
-                if ((2 ** outcome) & bet.mask != 0) {
-                    winAmount = possibleWinAmount;
-                }
-            } else {
-                // For larger modulos, check inclusion into half-open interval.
-                if (outcome < rollUnder) {
-                    winAmount = possibleWinAmount;
-                }
             }
 
             uint256 tmpBankerAmount = bankerAmount;
@@ -497,17 +556,20 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
 
             betAmount = betAmount.add(amount);
-
-            uint256 gapAmount = amount.mul(gapRate).div(TOTAL_RATE);
-            tmpBankerAmount = tmpBankerAmount.sub(gapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
+            gapAmount = gapAmount.add(tmpGapAmount);
+            
+            tmpBankerAmount = tmpBankerAmount.sub(tmpGapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
 
             bankerAmount = tmpBankerAmount;
-            bet.outcome = outcome;
             bet.winAmount = winAmount;
+            bet.bankerCards = bankerCards;
+            bet.playerCards = playerCards;
+            bet.finalPoints = finalPoints;
+            bet.pokerNums = pokerNums;
             bet.isSettled = true;
             
             // Record bet settlement in event log.
-            emit BetSettled(betId, bet.gambler, amount, uint8(modulo), uint8(rollUnder), bet.mask, outcome, winAmount);
+            emit BetSettled(betId, bet.gambler, amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums);
         }
     }
 
@@ -517,7 +579,10 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     function refundBet(uint256 betId) external nonReentrant {
         
         Bet storage bet = bets[betId];
-        uint256 amount = bet.amount;
+        uint256 amount;
+        for(uint256 i = 0; i < 5; i ++){
+            amount = amount.add(bet.amounts[i]);
+        }
 
         // Validation checks
         require(amount > 0 && bet.isSettled == false && block.number > bet.blockNumber + playerTimeBlocks, "No refundable");
@@ -530,7 +595,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         _safeTransferBNB(bet.gambler, amount);
 
         // Record refund in event logs
-        emit BetRefunded(betId, bet.gambler, amount);
+        emit BetRefunded(betId, bet.gambler, bet.amounts, amount);
     }
 
     // Deposit token to Dice as a banker, get Syrup back.
