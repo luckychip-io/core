@@ -390,7 +390,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         }
 
         require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE), "Range limit");
-        uint256[5] memory amounts = new uint256[](5);
+        uint256[] memory amounts = new uint256[](5);
         for(uint256 i = 0; i < 5; i ++){
             amounts[i] = amount.mul(tokenAmounts[i]).div(tokenAmount);
         }
@@ -445,9 +445,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             randomNumber = randomNumber ^ (uint256(keccak256(abi.encode(block.timestamp, block.difficulty))) % 1000000000000000000);
 
             // Cards of banker
-            uint8[3] memory bankerCards = new uint8[](3);
+            uint8[] memory bankerCards = new uint8[](3);
             // Cards of player
-            uint8[3] memory playerCards = new uint8[](3);
+            uint8[] memory playerCards = new uint8[](3);
             
             for (uint i = 0; i < 6; i++)
             {
@@ -459,9 +459,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
 
             // Final poionts [bankerPoint, playerPoint]
-            uint8[2] memory finalPoints = new uint8[](3);
+            uint8[] memory finalPoints = new uint8[](3);
             // Poker nums of banker and player [bankerPokerNum, playerPokerNum]
-            uint8[2] memory pokerNums = [2, 2];
+            uint8[] memory pokerNums = [2, 2];
 
             // A ~ K  1 ~ 13
             uint256 playerCard0 = (playerCards[0] % 13 + 1) >= 10 ? 0 : (playerCards[0] % 13 + 1);
