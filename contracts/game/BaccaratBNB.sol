@@ -494,7 +494,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                     bankerFinalPoint = bankerThreeCardPoint;
                     pokerNums[1] = 3;
                 } else {
-                    if (firstTurnPlayer < 6) {// Player has draw a third card
+                    if (playerTwoCardPoint < 6) {// Player has draw a third card
                         if (bankerTwoCardPoint == 3 && playerCard2 != 8) {
                             bankerFinalPoint = bankerThreeCardPoint;
                             pokerNums[1] = 3;
@@ -526,7 +526,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 pokerNums[1] = 2;
             }
 
-            finalPoint = [playerFinalPoint, bankerFinalPoint];
+            finalPoints = [playerFinalPoint, bankerFinalPoint];
 
             // Actual win amount by gambler.
             uint256 winAmount = 0;
@@ -579,7 +579,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             bet.isSettled = true;
             
             // Record bet settlement in event log.
-            emit BetSettled(betId, bet.gambler, amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums);
+            emit BetSettled(betId, bet.gambler, bet.amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums);
         }
     }
 
