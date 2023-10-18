@@ -304,7 +304,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Place bet
-    function placeBet(uint256[5] amounts, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
+    function placeBet(uint256[5] calldata amounts, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
         // Validate input data.
         uint256 amount;
         for(uint256 i = 0; i < 5; i ++){
@@ -356,7 +356,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // swap and place bet
-    function swapAndBet(address tokenAddr, uint256[5] tokenAmounts, uint256 swapRounterId, uint256 slippage, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
+    function swapAndBet(address tokenAddr, uint256[5] calldata tokenAmounts, uint256 swapRounterId, uint256 slippage, bool rngOnChain) external payable whenNotPaused nonReentrant notContract {
         require(swapRounterId < swapRouters.length, "Para error");
         
         uint256 amount;
