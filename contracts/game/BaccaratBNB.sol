@@ -338,6 +338,11 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
         emit BetPlaced(bets.length, msg.sender, amounts, rngOnChain);
 
+        uint8[3] memory bankerCards;
+        uint8[3] memory playerCards;
+        uint8[2] memory finalPoints;
+        uint8[2] memory pokerNums;
+
         // Store bet in bet list.
         bets.push(Bet(
             {
@@ -345,10 +350,10 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 blockNumber: block.number,
                 amounts: amounts,
                 winAmount: 0,
-                bankerCards: new uint8[](3),
-                playerCards: new uint8[](3),
-                finalPoints: new uint8[](2),
-                pokerNums: new uint8[](2),
+                bankerCards: bankerCards,
+                playerCards: playerCards,
+                finalPoints: finalPoints,
+                pokerNums: pokerNums,
                 rngOnChain: rngOnChain,
                 isSettled: false
             }
@@ -390,7 +395,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         }
 
         require(amount >= minBetAmount && amount <= bankerAmount.mul(maxBetRatio).div(TOTAL_RATE), "Range limit");
-        uint256[] memory amounts = new uint256[](5);
+        uint256[5] memory amounts;
         for(uint256 i = 0; i < 5; i ++){
             amounts[i] = amount.mul(tokenAmounts[i]).div(tokenAmount);
         }
@@ -408,6 +413,11 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
         // Record bet in event logs. Placed before pushing bet to array in order to get the correct bets.length.
         emit SwapBetPlaced(bets.length, msg.sender, tokenAddr, tokenAmounts, amounts, rngOnChain);
 
+        uint8[3] memory bankerCards;
+        uint8[3] memory playerCards;
+        uint8[2] memory finalPoints;
+        uint8[2] memory pokerNums;
+
         // Store bet in bet list.
         bets.push(Bet(
             {
@@ -415,10 +425,10 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 blockNumber: block.number,
                 amounts: amounts,
                 winAmount: 0,
-                bankerCards: new uint8[](3),
-                playerCards: new uint8[](3),
-                finalPoints: new uint8[](2),
-                pokerNums: new uint8[](2),
+                bankerCards: bankerCards,
+                playerCards: playerCards,
+                finalPoints: finalPoints,
+                pokerNums: pokerNums,
                 rngOnChain: rngOnChain,
                 isSettled: false
             }
@@ -445,9 +455,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             randomNumber = randomNumber ^ (uint256(keccak256(abi.encode(block.timestamp, block.difficulty))) % 1000000000000000000);
 
             // Cards of banker
-            uint8[] memory bankerCards = new uint8[](3);
+            uint8[3] memory bankerCards;
             // Cards of player
-            uint8[] memory playerCards = new uint8[](3);
+            uint8[3] memory playerCards;
             
             for (uint i = 0; i < 6; i++)
             {
@@ -459,9 +469,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
 
             // Final poionts [bankerPoint, playerPoint]
-            uint8[] memory finalPoints = new uint8[](3);
+            uint8[2] memory finalPoints;
             // Poker nums of banker and player [bankerPokerNum, playerPokerNum]
-            uint8[] memory pokerNums = [2, 2];
+            uint8[2] memory pokerNums = [2, 2];
 
             // A ~ K  1 ~ 13
             uint256 playerCard0 = (playerCards[0] % 13 + 1) >= 10 ? 0 : (playerCards[0] % 13 + 1);
@@ -579,7 +589,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             bet.isSettled = true;
             
             // Record bet settlement in event log.
-            emit BetSettled(betId, bet.gambler, bet.amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums);
+            emit BetSettled(betId, bet.gambler, bet.amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums, bet.rngOnChain);
         }
     }
 
