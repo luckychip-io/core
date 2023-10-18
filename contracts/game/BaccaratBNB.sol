@@ -97,7 +97,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
     event BetPlaced(uint256 indexed betId, address indexed gambler, uint256[5] amounts, bool rngOnChain);
     event SwapBetPlaced(uint256 indexed betId, address indexed gambler, address tokenAddr, uint256[5] tokenAmounts, uint256[5] amounts, bool rngOnChain);
-    event BetSettled(uint256 indexed betId, address indexed gambler, uint256[5] amounts, uint256 winAmount, uint8[3] bankerCards, uint8[3] playerCards, uint8[2] finalPoints, uint8[2] pokerNums, bool rngOnChain);
+    event BetSettled(uint256 indexed betId, address indexed gambler, uint256[5] amounts, uint256 winAmount, uint8[3] bankerCards, uint8[3] playerCards, uint8[2] finalPoints, uint8[2] pokerNums);
     event BetRefunded(uint256 indexed betId, address indexed gambler, uint256[5] amounts, uint256 amount);
 
     constructor(
@@ -436,7 +436,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // Get different digits of random number
-    function getNumberDigit(uint number, uint start, uint long) public returns (uint) {
+    function getNumberDigit(uint number, uint start, uint long) public pure returns (uint) {
         return (number / (10 ** start)) % (10 ** long);
     }
 
@@ -473,79 +473,81 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             // Poker nums of banker and player [bankerPokerNum, playerPokerNum]
             uint8[2] memory pokerNums = [2, 2];
 
-            // A ~ K  1 ~ 13
-            uint256 playerCard0 = (playerCards[0] % 13 + 1) >= 10 ? 0 : (playerCards[0] % 13 + 1);
-            uint256 playerCard1 = (playerCards[1] % 13 + 1) >= 10 ? 0 : (playerCards[1] % 13 + 1);
-            uint256 playerCard2 = (playerCards[2] % 13 + 1) >= 10 ? 0 : (playerCards[2] % 13 + 1);
-
-            uint256 bankerCard0 = (bankerCards[0] % 13 + 1) >= 10 ? 0 : (bankerCards[0] % 13 + 1);
-            uint256 bankerCard1 = (bankerCards[1] % 13 + 1) >= 10 ? 0 : (bankerCards[1] % 13 + 1);
-            uint256 bankerCard2 = (bankerCards[2] % 13 + 1) >= 10 ? 0 : (bankerCards[2] % 13 + 1);
-
-            uint256 playerTwoCardPoint = (playerCard0 + playerCard1) % 10;
-            uint256 bankerTwoCardPoint = (bankerCard0 + bankerCard1) % 10;
-            uint256 playerThreeCardPoint = (playerCard0 + playerCard1 + playerCard2) % 10;
-            uint256 bankerThreeCardPoint = (bankerCard0 + bankerCard1 + bankerCard2) % 10;
-
-            uint256 playerFinalPoint = 0;
-            uint256 bankerFinalPoint = 0;
-
-            // Drawing rules
-            if (playerTwoCardPoint < 6 && bankerTwoCardPoint < 8) {// Player need to draw a third card
-                playerFinalPoint = playerThreeCardPoint;
-                pokerNums[0] = 3;
-            } else {
-                playerFinalPoint = playerTwoCardPoint;
-                pokerNums[0] = 2;
-            }
-
-            if (bankerTwoCardPoint < 7 && playerTwoCardPoint < 8) {// Banker need to draw a third card
-                if (bankerTwoCardPoint < 3) {
-                    bankerFinalPoint = bankerThreeCardPoint;
-                    pokerNums[1] = 3;
+            {
+                // A ~ K  1 ~ 13
+                uint8 playerCard0 = (playerCards[0] % 13 + 1) >= 10 ? 0 : (playerCards[0] % 13 + 1);
+                uint8 playerCard1 = (playerCards[1] % 13 + 1) >= 10 ? 0 : (playerCards[1] % 13 + 1);
+                uint8 playerCard2 = (playerCards[2] % 13 + 1) >= 10 ? 0 : (playerCards[2] % 13 + 1);
+    
+                uint8 bankerCard0 = (bankerCards[0] % 13 + 1) >= 10 ? 0 : (bankerCards[0] % 13 + 1);
+                uint8 bankerCard1 = (bankerCards[1] % 13 + 1) >= 10 ? 0 : (bankerCards[1] % 13 + 1);
+                uint8 bankerCard2 = (bankerCards[2] % 13 + 1) >= 10 ? 0 : (bankerCards[2] % 13 + 1);
+    
+                uint8 playerTwoCardPoint = (playerCard0 + playerCard1) % 10;
+                uint8 bankerTwoCardPoint = (bankerCard0 + bankerCard1) % 10;
+                uint8 playerThreeCardPoint = (playerCard0 + playerCard1 + playerCard2) % 10;
+                uint8 bankerThreeCardPoint = (bankerCard0 + bankerCard1 + bankerCard2) % 10;
+    
+                uint8 playerFinalPoint = 0;
+                uint8 bankerFinalPoint = 0;
+    
+                // Drawing rules
+                if (playerTwoCardPoint < 6 && bankerTwoCardPoint < 8) {// Player need to draw a third card
+                    playerFinalPoint = playerThreeCardPoint;
+                    pokerNums[0] = 3;
                 } else {
-                    if (playerTwoCardPoint < 6) {// Player has draw a third card
-                        if (bankerTwoCardPoint == 3 && playerCard2 != 8) {
-                            bankerFinalPoint = bankerThreeCardPoint;
-                            pokerNums[1] = 3;
-                        } else if (bankerTwoCardPoint == 4 && playerCard2 > 1 && playerCard2 < 8) {
-                            bankerFinalPoint = bankerThreeCardPoint;
-                            pokerNums[1] = 3;
-                        } else if (bankerTwoCardPoint == 5 && playerCard2 > 3 && playerCard2 < 8) {
-                            bankerFinalPoint = bankerThreeCardPoint;
-                            pokerNums[1] = 3;
-                        } else if (bankerTwoCardPoint == 6 && playerCard2 > 5 && playerCard2 < 8) {
-                            bankerFinalPoint = bankerThreeCardPoint;
-                            pokerNums[1] = 3;
-                        } else {
-                            bankerFinalPoint = bankerTwoCardPoint;
-                            pokerNums[1] = 2;
-                        }
-                    } else {// Player hasn't draw a third card
-                        if (bankerTwoCardPoint < 6) {
-                            bankerFinalPoint = bankerThreeCardPoint;
-                            pokerNums[1] = 3;
-                        } else {
-                            bankerFinalPoint = bankerTwoCardPoint;
-                            pokerNums[1] = 2;
+                    playerFinalPoint = playerTwoCardPoint;
+                    pokerNums[0] = 2;
+                }
+    
+                if (bankerTwoCardPoint < 7 && playerTwoCardPoint < 8) {// Banker need to draw a third card
+                    if (bankerTwoCardPoint < 3) {
+                        bankerFinalPoint = bankerThreeCardPoint;
+                        pokerNums[1] = 3;
+                    } else {
+                        if (playerTwoCardPoint < 6) {// Player has draw a third card
+                            if (bankerTwoCardPoint == 3 && playerCard2 != 8) {
+                                bankerFinalPoint = bankerThreeCardPoint;
+                                pokerNums[1] = 3;
+                            } else if (bankerTwoCardPoint == 4 && playerCard2 > 1 && playerCard2 < 8) {
+                                bankerFinalPoint = bankerThreeCardPoint;
+                                pokerNums[1] = 3;
+                            } else if (bankerTwoCardPoint == 5 && playerCard2 > 3 && playerCard2 < 8) {
+                                bankerFinalPoint = bankerThreeCardPoint;
+                                pokerNums[1] = 3;
+                            } else if (bankerTwoCardPoint == 6 && playerCard2 > 5 && playerCard2 < 8) {
+                                bankerFinalPoint = bankerThreeCardPoint;
+                                pokerNums[1] = 3;
+                            } else {
+                                bankerFinalPoint = bankerTwoCardPoint;
+                                pokerNums[1] = 2;
+                            }
+                        } else {// Player hasn't draw a third card
+                            if (bankerTwoCardPoint < 6) {
+                                bankerFinalPoint = bankerThreeCardPoint;
+                                pokerNums[1] = 3;
+                            } else {
+                                bankerFinalPoint = bankerTwoCardPoint;
+                                pokerNums[1] = 2;
+                            }
                         }
                     }
+                } else {
+                    bankerFinalPoint = bankerTwoCardPoint;
+                    pokerNums[1] = 2;
                 }
-            } else {
-                bankerFinalPoint = bankerTwoCardPoint;
-                pokerNums[1] = 2;
+    
+                finalPoints[0] = bankerFinalPoint;
+                finalPoints[1] = playerFinalPoint;
             }
-
-            finalPoints[0] = bankerFinalPoint;
-            finalPoints[1] = playerFinalPoint;
 
             // Actual win amount by gambler.
             uint256 winAmount = 0;
-            if(bankerFinalPoint > playerFinalPoint){
+            if(finalPoints[0] > finalPoints[1]){
                 if(bet.amounts[0] > 0){
                     winAmount = bet.amounts[0].add(bet.amounts[0].mul(9500).div(TOTAL_RATE));
                 }
-            }else if(bankerFinalPoint < playerFinalPoint){
+            }else if(finalPoints[0] < finalPoints[1]){
                 if(bet.amounts[1] > 0){
                     winAmount = bet.amounts[1].mul(2);
                 }
@@ -562,12 +564,12 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
 
             // BANKER_PAIRS
-            if(bet.amounts[3] > 0 && bankerCard0 == bankerCard1){
+            if(bet.amounts[3] > 0 && ((bankerCards[0] % 13) == (bankerCards[1] % 13))){
                 winAmount = winAmount.add(bet.amounts[3].mul(12));
             }
 
             // PLAYER_PAIRS
-            if(bet.amounts[4] > 0 && playerCard0 == playerCard1){
+            if(bet.amounts[4] > 0 && ((playerCards[0] % 13) == (playerCards[1] % 13))){
                 winAmount = winAmount.add(bet.amounts[4].mul(12));
             }
 
@@ -590,7 +592,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             bet.isSettled = true;
             
             // Record bet settlement in event log.
-            emit BetSettled(betId, bet.gambler, bet.amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums, bet.rngOnChain);
+            emit BetSettled(betId, bet.gambler, bet.amounts, winAmount, bankerCards, playerCards, finalPoints, pokerNums);
         }
     }
 
