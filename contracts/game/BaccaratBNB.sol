@@ -27,15 +27,13 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     uint256 public playerEndBlock;
     uint256 public bankerEndBlock;
     uint256 public betAmount;
-    uint256 public gapAmount;
     uint256 public playerTimeBlocks;
     uint256 public bankerTimeBlocks;
     uint256 public constant TOTAL_RATE = 10000; // 100%
-    uint256 public gapRate = 500;// Gap rate when banker wins, default 5%
-    uint256 public operationRate = 500; // 5% in gap
-    uint256 public treasuryRate = 500; // 5% in gap
-    uint256 public bonusRate = 2000; // 20% in gap
-    uint256 public lotteryRate = 500; // 5% in gap
+    uint256 public operationRate = 500; // 5% of banker profit to operation address
+    uint256 public treasuryRate = 500; // 5% of banker profit to treasury address
+    uint256 public bonusRate = 2000; // 20% of banker profit to bonus address
+    uint256 public lotteryRate = 500; // 5% of banker profit to lottery address
     uint256 public maxBankerAmount; // max amount can bank
     uint256 public offChainFeeAmount; // Off-chain fee amount for rng
     uint256 public onChainFeeAmount; // On-chain fee amount for rng
@@ -87,7 +85,7 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint256) public bankerInfo;
 
     event SetAdmin(address operationAddr, address treasuryAddr, address lotteryAddr);
-    event SetRates(uint256 gapRate, uint256 operationRate, uint256 treasuryRate, uint256 bonusRate, uint256 lotteryRate);
+    event SetRates(uint256 operationRate, uint256 treasuryRate, uint256 bonusRate, uint256 lotteryRate);
     event SetAmounts(uint256 maxBankerAmount, uint256 minBetAmount, uint256 offChainFeeAmount, uint256 onChainFeeAmount);
     event SetRatios(uint256 maxWithdrawFeeRatio, uint256 maxBetRatio);
     event SetContract(address lcTokenAddr, address oracleAddr, address luckyPowerAddr, address flipRngAddr);
@@ -149,14 +147,13 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // set rates
-    function setRates(uint256 _gapRate, uint256 _operationRate, uint256 _treasuryRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyOwner {
-        require(_gapRate <= 1000 && _operationRate.add(_treasuryRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE, "rate limit");
-        gapRate = _gapRate;
+    function setRates(uint256 _operationRate, uint256 _treasuryRate, uint256 _bonusRate, uint256 _lotteryRate) external onlyOwner {
+        require(_operationRate.add(_treasuryRate).add(_bonusRate).add(_lotteryRate) <= TOTAL_RATE.div(2), "rate limit");
         operationRate = _operationRate;
         treasuryRate = _treasuryRate;
         bonusRate = _bonusRate;
         lotteryRate = _lotteryRate;
-        emit SetRates(_gapRate, operationRate, treasuryRate, bonusRate, lotteryRate);
+        emit SetRates(operationRate, treasuryRate, bonusRate, lotteryRate);
     }
 
     // set amounts
@@ -221,17 +218,21 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
     }
 
     // end player time, triggers banker time
-    function endPlayerTime() external onlyOwner whenNotPaused{
+    function endPlayerTime() external onlyOwner whenNotPaused {
         _pause();
+        _claimBonusAndLottery();
         netValue = netValue.mul(bankerAmount).div(prevBankerAmount);
         emit UpdateNetValue(netValue);
-        _claimBonusAndLottery();
         emit EndPlayerTime();
     }
 
     // Claim all bonus to LuckyPower
     function _claimBonusAndLottery() internal {
-        if(gapAmount > 0){
+        
+        if(bankerAmount > prevBankerAmount){
+            uint256 gapAmount = bankerAmount.sub(prevBankerAmount);
+            bankerAmount = bankerAmount.sub(gapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
+            
             uint256 totalOperationAmount = 0;
 
             uint256 treasuryAmount = gapAmount.mul(treasuryRate).div(TOTAL_RATE);
@@ -270,8 +271,6 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             if(lotteryAmount > 0){
                 _safeTransferBNB(lotteryAddr, lotteryAmount);
             }
-
-            gapAmount = 0;
         }
     }
 
@@ -531,21 +530,34 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
 
             // Actual win amount by gambler.
             uint256 winAmount = 0;
-            uint256 tmpGapAmount = 0;
-            uint256 tmpWinAmount = 0;
             if(bankerFinalPoint > playerFinalPoint){
                 if(bet.amounts[0] > 0){
-                    tmpWinAmount = bet.amounts[0].mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE);
-                    tmpGapAmount = bet.amounts[0].mul(gapRate).div(TOTAL_RATE);
-                    winAmount = winAmount.add(bet.amounts[0]).add(tmpWinAmount);
+                    winAmount = bet.amounts[0].add(bet.amounts[0].mul(9500).div(TOTAL_RATE));
                 }
             }else if(bankerFinalPoint < playerFinalPoint){
                 if(bet.amounts[1] > 0){
-                    tmpWinAmount = bet.amounts[1].mul(TOTAL_RATE.sub(gapRate)).div(TOTAL_RATE);
-                    winAmount = winAmount.add(bet.amounts[0]).add(tmpWinAmount);
+                    winAmount = bet.amounts[1].mul(2);
                 }
             }else{
+                if(bet.amounts[2] > 0){
+                    winAmount = bet.amounts[2].mul(9);
+                }
+                if(bet.amounts[0] > 0){ // return banker's money back
+                    winAmount = winAmount.add(bet.amounts[0]);
+                }
+                if(bet.amounts[1] > 0){ // return player's money back
+                    winAmount = winAmount.add(bet.amounts[1]);
+                }
+            }
 
+            // BANKER_PAIRS
+            if(bet.amounts[3] > 0 && bankerCard0 == bankerCard1){
+                winAmount = winAmount.add(bet.amounts[3].mul(12));
+            }
+
+            // PLAYER_PAIRS
+            if(bet.amounts[4] > 0 && playerCard0 == playerCard1){
+                winAmount = winAmount.add(bet.amounts[4].mul(12));
             }
 
             uint256 tmpBankerAmount = bankerAmount;
@@ -556,11 +568,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             }
 
             betAmount = betAmount.add(amount);
-            gapAmount = gapAmount.add(tmpGapAmount);
             
-            tmpBankerAmount = tmpBankerAmount.sub(tmpGapAmount.mul(operationRate.add(treasuryRate).add(bonusRate).add(lotteryRate)).div(TOTAL_RATE));
-
             bankerAmount = tmpBankerAmount;
+
             bet.winAmount = winAmount;
             bet.bankerCards = bankerCards;
             bet.playerCards = playerCards;
