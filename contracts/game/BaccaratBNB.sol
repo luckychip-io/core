@@ -462,9 +462,9 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
             for (uint i = 0; i < 6; i++)
             {
                 if(i < 3){
-                    playerCards[i] = getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8);
+                    playerCards[i] = uint8(getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8));
                 }else{
-                    bankerCards[i - 3] = getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8);
+                    bankerCards[i - 3] = uint8(getNumberDigit(randomNumber, 1 + i * 3, 3) % (52 * 8));
                 }
             }
 
@@ -536,7 +536,8 @@ contract BaccaratBNB is IGame, Ownable, ReentrancyGuard, Pausable {
                 pokerNums[1] = 2;
             }
 
-            finalPoints = [playerFinalPoint, bankerFinalPoint];
+            finalPoints[0] = bankerFinalPoint;
+            finalPoints[1] = playerFinalPoint;
 
             // Actual win amount by gambler.
             uint256 winAmount = 0;
